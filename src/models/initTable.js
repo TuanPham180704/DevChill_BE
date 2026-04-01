@@ -36,7 +36,7 @@ const initTables = async () => {
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS audit_logs (
-        id BIGSERIAL PRIMARY KEY,
+        id BIGSERIAL PRIMARY KEY, 
 
         entity_type VARCHAR(50),
         entity_id INTEGER,
