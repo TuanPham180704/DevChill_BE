@@ -37,7 +37,7 @@ Cảm ơn bạn đã sử dụng DevChill!
     <p><a href="${resetLink}" style="display:inline-block;padding:10px 20px;background:#1e90ff;color:#fff;text-decoration:none;border-radius:5px;">Thiết lập lại mật khẩu</a></p>
     <p>Lưu ý:</p>
     <ul>
-    <li>Liên kết sẽ hết hạn sau 30 phút kể từ thời điểm yêu cầu.</li>
+    <li>Liên kết sẽ hết hạn sau 5 phút kể từ thời điểm yêu cầu.</li>
     <li>Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</li>
     <li>Nếu cần hỗ trợ thêm, hãy liên hệ với chúng tôi qua Telegram.</li>
    </ul>

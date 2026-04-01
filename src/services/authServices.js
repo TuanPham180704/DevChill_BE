@@ -14,22 +14,79 @@ export const register = async (username, email, password, confirmPassword) => {
       throw err;
     }
 
-    const exist = await pool.query("SELECT id FROM users WHERE email=$1", [
-      email,
-    ]);
+    const exist = await pool.query(
+      "SELECT id, is_active FROM users WHERE email=$1",
+      [email],
+    );
 
+    // ================================
+    // 🔥 EMAIL ĐÃ TỒN TẠI
+    // ================================
     if (exist.rows.length) {
-      const err = new Error("Email đã tồn tại");
-      err.status = 400;
-      throw err;
+      const user = exist.rows[0];
+
+      // ❌ Đã active → chặn
+      if (user.is_active) {
+        const err = new Error("Email đã tồn tại");
+        err.status = 400;
+        throw err;
+      }
+
+      // 🔥 CHECK RATE LIMIT (OTP còn hạn thì block)
+      const existingOtp = await pool.query(
+        `SELECT * FROM email_verifications
+         WHERE email=$1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [email],
+      );
+
+      if (existingOtp.rows.length) {
+        const expiresAt = new Date(existingOtp.rows[0].expires_at);
+        const now = new Date();
+
+        if (expiresAt > now) {
+          const remaining = Math.ceil((expiresAt - now) / 1000);
+          const err = new Error(
+            `Vui lòng đợi ${remaining}s trước khi gửi lại OTP`,
+          );
+          err.status = 400;
+          throw err;
+        }
+      }
+
+      // ✔ Cho gửi lại OTP
+      await pool.query("DELETE FROM email_verifications WHERE email=$1", [
+        email,
+      ]);
+
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expires = new Date(Date.now() + 5 * 60 * 1000);
+
+      await pool.query(
+        `INSERT INTO email_verifications (email,code,expires_at)
+         VALUES ($1,$2,$3)`,
+        [email, code, expires],
+      );
+
+      await sendRegisterCodeEmail(email, code);
+
+      return {
+        message: "Email chưa xác thực, đã gửi lại OTP",
+        otp_expire: expires,
+      };
     }
+
+    // ================================
+    // ✅ EMAIL MỚI
+    // ================================
     const hashed = await bcrypt.hash(password, SALT);
+
     await pool.query(
       `INSERT INTO users (username,email,password,is_active)
        VALUES ($1,$2,$3,false)`,
       [username, email, hashed],
     );
-    await pool.query("DELETE FROM email_verifications WHERE email=$1", [email]);
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expires = new Date(Date.now() + 5 * 60 * 1000);
@@ -39,6 +96,7 @@ export const register = async (username, email, password, confirmPassword) => {
        VALUES ($1,$2,$3)`,
       [email, code, expires],
     );
+
     await sendRegisterCodeEmail(email, code);
 
     return { message: "Đã gửi OTP", otp_expire: expires };
@@ -54,7 +112,6 @@ export const verifyOtp = async (email, code) => {
        ORDER BY created_at DESC LIMIT 1`,
       [email, code],
     );
-
     if (!res.rows.length) {
       const err = new Error("OTP không đúng");
       err.status = 400;
@@ -156,23 +213,41 @@ export const login = async (email, password) => {
 
 export const forgotPassword = async (email) => {
   try {
-    const res = await pool.query("SELECT id FROM users WHERE email=$1", [
-      email,
-    ]);
+    const res = await pool.query(
+      "SELECT id, reset_token_expires FROM users WHERE email=$1",
+      [email],
+    );
+
     if (!res.rows.length) {
       const err = new Error("Email không tồn tại");
       err.status = 404;
       throw err;
     }
-    const token = crypto.randomBytes(32).toString("hex");
-    const expires = new Date(Date.now() + 30 * 60 * 1000);
 
+    const user = res.rows[0];
+    if (user.reset_token_expires) {
+      const now = new Date();
+      const expiresAt = new Date(user.reset_token_expires);
+
+      if (expiresAt > now) {
+        const remaining = Math.ceil((expiresAt - now) / 1000);
+        const err = new Error(
+          `Vui lòng đợi ${remaining}s trước khi gửi lại email reset`,
+        );
+        err.status = 400;
+        throw err;
+      }
+    }
+    const token = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 5 * 60 * 1000);
     await pool.query(
-      "UPDATE users SET reset_token=$1, reset_token_expires=$2 WHERE email=$3",
+      `UPDATE users 
+       SET reset_token=$1, reset_token_expires=$2 
+       WHERE email=$3`,
       [token, expires, email],
     );
     await sendResetEmail(email, token);
-    return { message: "Đã gửi mail reset password" };
+    return { message: "Đã gửi mail reset password", expires };
   } catch (error) {
     throw error;
   }
