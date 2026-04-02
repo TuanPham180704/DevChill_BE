@@ -168,17 +168,26 @@ export const resendOtp = async (email) => {
 export const login = async (email, password) => {
   try {
     const res = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
+
     if (!res.rows.length) {
       const err = new Error("Sai email hoặc mật khẩu");
       err.status = 400;
       throw err;
     }
     const user = res.rows[0];
-    if (!user.is_active) {
-      const err = new Error("Account Locked!!!");
+    if (user.is_locked) {
+      const err = new Error(
+        `Tài khoản đang bị khóa tới ${user.lock_until ? new Date(user.lock_until).toLocaleString("vi-VN") : "thời gian chưa xác định"}`,
+      );
       err.status = 403;
       throw err;
     }
+    if (!user.is_active) {
+      const err = new Error("Tài khoản chưa được kích hoạt");
+      err.status = 403;
+      throw err;
+    }
+
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
       const err = new Error("Sai email hoặc mật khẩu");

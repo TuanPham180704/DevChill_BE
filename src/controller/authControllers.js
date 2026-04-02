@@ -41,7 +41,7 @@ export const login = async (req, res) => {
     const data = await authService.login(email, password);
     res.json(data);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    res.status(err.status || 500).json({ message: err.message });
   }
 };
 

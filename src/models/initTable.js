@@ -19,11 +19,16 @@ const initTables = async () => {
         reset_token_expires TIMESTAMP,
         is_active BOOLEAN DEFAULT FALSE,
         deleted_at TIMESTAMP,
+        is_locked BOOLEAN DEFAULT FALSE,
+        lock_until TIMESTAMP,
+        block_reason TEXT,        
+        blocked_at TIMESTAMP,         
 
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS email_verifications (
         id SERIAL PRIMARY KEY,
@@ -35,20 +40,16 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS audit_logs (
         id BIGSERIAL PRIMARY KEY, 
-
         entity_type VARCHAR(50),
         entity_id INTEGER,
-
         action VARCHAR(50),
-
         performed_by INTEGER REFERENCES users(id),
-
         old_data JSONB,
         new_data JSONB,
-
         reason TEXT,
 
         ip_address VARCHAR(50),
@@ -57,6 +58,7 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_users_email 
       ON users(email);
@@ -81,6 +83,7 @@ const initTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_audit_created_at 
       ON audit_logs(created_at);
     `);
+
     await pool.query(`
       CREATE OR REPLACE FUNCTION update_updated_at_column()
       RETURNS TRIGGER AS $$
@@ -90,6 +93,7 @@ const initTables = async () => {
       END;
       $$ language 'plpgsql';
     `);
+
     await pool.query(`
       DO $$
       BEGIN

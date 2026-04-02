@@ -5,6 +5,8 @@ import dotenv from "dotenv";
 import bodyParser from "body-parser";
 import authRoutes from "./routes/authRoutes.js";
 
+import adminUserRoutes from "./routes/Admin/userAdRoutes.js";
+
 import profileRoutes from "./routes/Users/userRoutes.js";
 dotenv.config();
 
@@ -17,7 +19,11 @@ app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 app.use(express.json());
 app.use(bodyParser.json({ limit: "10mb" }));
 app.use(bodyParser.urlencoded({ extended: true }));
+
 app.use("/api/auth", authRoutes);
+
+app.use("/api/admin/users", adminUserRoutes);
+
 
 app.use("/api/profile", profileRoutes);
 

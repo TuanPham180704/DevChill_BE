@@ -26,7 +26,6 @@ export const updateProfile = async (
   avatar_url,
   birth_date,
 ) => {
-  // Convert string 'YYYY-MM-DD' sang date PostgreSQL
   const res = await pool.query(
     `UPDATE users
    SET username=$1,
