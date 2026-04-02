@@ -18,21 +18,13 @@ export const register = async (username, email, password, confirmPassword) => {
       "SELECT id, is_active FROM users WHERE email=$1",
       [email],
     );
-
-    // ================================
-    // 🔥 EMAIL ĐÃ TỒN TẠI
-    // ================================
     if (exist.rows.length) {
       const user = exist.rows[0];
-
-      // ❌ Đã active → chặn
       if (user.is_active) {
         const err = new Error("Email đã tồn tại");
         err.status = 400;
         throw err;
       }
-
-      // 🔥 CHECK RATE LIMIT (OTP còn hạn thì block)
       const existingOtp = await pool.query(
         `SELECT * FROM email_verifications
          WHERE email=$1
@@ -54,8 +46,6 @@ export const register = async (username, email, password, confirmPassword) => {
           throw err;
         }
       }
-
-      // ✔ Cho gửi lại OTP
       await pool.query("DELETE FROM email_verifications WHERE email=$1", [
         email,
       ]);
@@ -76,10 +66,6 @@ export const register = async (username, email, password, confirmPassword) => {
         otp_expire: expires,
       };
     }
-
-    // ================================
-    // ✅ EMAIL MỚI
-    // ================================
     const hashed = await bcrypt.hash(password, SALT);
 
     await pool.query(

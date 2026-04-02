@@ -10,22 +10,24 @@ export const getProfileController = async (req, res) => {
 };
 
 export const updateProfileController = async (req, res) => {
-  const { username, email, gender, avatar_url } = req.body;
-
+  const { username, gender, avatar_url, birth_date } = req.body;
+  if (!username && !gender && !avatar_url && !birth_date) {
+    return res.status(400).json({ message: "No fields to update" });
+  }
   try {
     const user = await userService.updateProfile(
       req.user.id,
       username,
-      email,
       gender,
       avatar_url,
+      birth_date, 
     );
-
     res.json(user);
   } catch (err) {
     res.status(err.status || 400).json({ message: err.message });
   }
 };
+
 export const changePasswordController = async (req, res) => {
   const { oldPassword, newPassword, confirmPassword } = req.body;
 

@@ -4,8 +4,8 @@ import { authenticate } from "../../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-router.get("/me", authenticate, userController.getProfileController);
-router.put("/me", authenticate, userController.updateProfileController);
+router.get("/", authenticate, userController.getProfileController);
+router.put("/", authenticate, userController.updateProfileController);
 router.put(
   "/change-password",
   authenticate,

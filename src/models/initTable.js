@@ -8,6 +8,7 @@ const initTables = async () => {
         username VARCHAR(100) NOT NULL,
         email VARCHAR(150) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
+        birth_date DATE,
         gender VARCHAR(10) DEFAULT 'unknown' 
           CHECK (gender IN ('male', 'female', 'other', 'unknown')),
         role VARCHAR(20) DEFAULT 'user'
