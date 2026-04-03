@@ -5,16 +5,14 @@ import { sendUnlockEmail } from "../../utils/sendUnlockEmail.js";
 
 const SALT = 10;
 
-/* =========================
-   GET ALL USERS
-========================= */
 export async function getAllUsers({ page = 1, limit = 10 }) {
   const offset = (page - 1) * limit;
 
-  const res = await pool.query(
+  const dataRes = await pool.query(
     `
     SELECT id, username, email, gender, avatar_url,
-           role, is_premium, is_active, is_locked
+           role, is_premium, is_active, is_locked,
+           created_at, updated_at
     FROM users
     WHERE deleted_at IS NULL
     ORDER BY id DESC
@@ -23,12 +21,23 @@ export async function getAllUsers({ page = 1, limit = 10 }) {
     [limit, offset],
   );
 
-  return res.rows;
+  const countRes = await pool.query(
+    `
+    SELECT COUNT(*) AS total
+    FROM users
+    WHERE deleted_at IS NULL
+  `,
+  );
+
+  return {
+    data: dataRes.rows,
+    total: Number(countRes.rows[0].total),
+    page: Number(page),
+    limit: Number(limit),
+    totalPages: Math.ceil(countRes.rows[0].total / limit),
+  };
 }
 
-/* =========================
-   GET USER BY ID
-========================= */
 export async function getUserById(id) {
   const res = await pool.query(
     `SELECT * FROM users WHERE id=$1 AND deleted_at IS NULL`,
@@ -37,9 +46,6 @@ export async function getUserById(id) {
   return res.rows[0];
 }
 
-/* =========================
-   UPDATE USER
-========================= */
 export async function updateUser(id, data) {
   const fields = [];
   const values = [];
@@ -70,7 +76,10 @@ export async function updateUser(id, data) {
       fields.push(`block_reason=NULL`);
     }
   }
-
+  if (data.role && ["user", "admin"].includes(data.role)) {
+    fields.push(`role=$${index++}`);
+    values.push(data.role);
+  }
   if (!fields.length) return null;
 
   values.push(id);
@@ -79,18 +88,25 @@ export async function updateUser(id, data) {
     `UPDATE users SET ${fields.join(", ")} WHERE id=$${index} RETURNING *`,
     values,
   );
+  if (res.rows.length === 0) {
+    const err = new Error("User không tồn tại");
+    err.status = 404;
+    throw err;
+  }
 
   return res.rows[0];
 }
 
-/* =========================
-   LOCK USER + EMAIL
-========================= */
 export async function lockUser(id, { lock_until, block_reason }) {
+  const formattedLockUntil =
+    lock_until && lock_until.trim() !== "" ? lock_until : null;
   const userRes = await pool.query(`SELECT email FROM users WHERE id=$1`, [id]);
-
   const email = userRes.rows[0]?.email;
-
+  if (!email) {
+    const err = new Error("User not found");
+    err.status = 404;
+    throw err;
+  }
   const res = await pool.query(
     `
     UPDATE users
@@ -101,12 +117,11 @@ export async function lockUser(id, { lock_until, block_reason }) {
     WHERE id = $3
     RETURNING *
   `,
-    [lock_until, block_reason, id],
+    [formattedLockUntil, block_reason, id],
   );
 
-  // gửi mail
   try {
-    await sendLockEmail(email, block_reason, lock_until);
+    await sendLockEmail(email, block_reason, formattedLockUntil); // FIX 4: dùng biến đã sanitize
   } catch (err) {
     console.error("Email lock lỗi:", err.message);
   }
@@ -114,9 +129,6 @@ export async function lockUser(id, { lock_until, block_reason }) {
   return res.rows[0];
 }
 
-/* =========================
-   AUTO UNLOCK + EMAIL
-========================= */
 export async function autoUnlockUsers() {
   const res = await pool.query(`
     UPDATE users
@@ -140,13 +152,19 @@ export async function autoUnlockUsers() {
 }
 
 export async function unlockUser(id) {
-  // Lấy email user
   const userRes = await pool.query(`SELECT email FROM users WHERE id=$1`, [id]);
+  if (userRes.rows.length === 0) {
+    const err = new Error("User not found");
+    err.status = 404;
+    throw err;
+  }
   const email = userRes.rows[0]?.email;
+  if (!email) {
+    const err = new Error("Người dùng không tồn tại hoặc chưa có email");
+    err.status = 404;
+    throw err;
+  }
 
-  if (!email) throw new Error("Người dùng không tồn tại hoặc chưa có email");
-
-  // Cập nhật DB
   const res = await pool.query(
     `
     UPDATE users
@@ -159,7 +177,6 @@ export async function unlockUser(id) {
     [id],
   );
 
-  // Gửi email thông báo
   try {
     await sendUnlockEmail(email);
   } catch (err) {

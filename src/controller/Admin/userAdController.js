@@ -1,8 +1,5 @@
 import * as userService from "../../services/Admin/userAdServices.js";
 
-/* =========================
-   GET ALL USERS
-========================= */
 export const getAllUsers = async (req, res) => {
   try {
     const data = await userService.getAllUsers(req.query);
@@ -15,9 +12,6 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
-/* =========================
-   GET USER BY ID
-========================= */
 export const getUserById = async (req, res) => {
   try {
     const user = await userService.getUserById(req.params.id);
@@ -36,10 +30,6 @@ export const getUserById = async (req, res) => {
     });
   }
 };
-
-/* =========================
-   UPDATE USER
-========================= */
 export const updateUser = async (req, res) => {
   try {
     const user = await userService.updateUser(req.params.id, req.body);
@@ -59,9 +49,6 @@ export const updateUser = async (req, res) => {
   }
 };
 
-/* =========================
-   LOCK USER
-========================= */
 export const lockUser = async (req, res) => {
   try {
     const { lock_until, block_reason } = req.body;
