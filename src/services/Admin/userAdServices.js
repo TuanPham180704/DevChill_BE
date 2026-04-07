@@ -98,15 +98,36 @@ export async function updateUser(id, data) {
 }
 
 export async function lockUser(id, { lock_until, block_reason }) {
-  const formattedLockUntil =
-    lock_until && lock_until.trim() !== "" ? lock_until : null;
+  let formattedLockUntil = null;
+
+  if (lock_until && lock_until.trim() !== "") {
+    const lockDate = new Date(lock_until);
+    const now = new Date();
+
+    if (isNaN(lockDate.getTime())) {
+      const err = new Error("Ngày khóa không hợp lệ");
+      err.status = 400;
+      throw err;
+    }
+
+    if (lockDate <= now) {
+      const err = new Error("Ngày khóa phải lớn hơn thời gian hiện tại");
+      err.status = 400;
+      throw err;
+    }
+
+    formattedLockUntil = lockDate;
+  }
+
   const userRes = await pool.query(`SELECT email FROM users WHERE id=$1`, [id]);
   const email = userRes.rows[0]?.email;
+
   if (!email) {
     const err = new Error("User not found");
     err.status = 404;
     throw err;
   }
+
   const res = await pool.query(
     `
     UPDATE users
@@ -121,7 +142,7 @@ export async function lockUser(id, { lock_until, block_reason }) {
   );
 
   try {
-    await sendLockEmail(email, block_reason, formattedLockUntil); // FIX 4: dùng biến đã sanitize
+    await sendLockEmail(email, block_reason, formattedLockUntil);
   } catch (err) {
     console.error("Email lock lỗi:", err.message);
   }

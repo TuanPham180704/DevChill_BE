@@ -73,8 +73,9 @@ export const lockUser = async (req, res) => {
     });
   } catch (err) {
     console.error("lockUser error:", err);
-    res.status(500).json({
-      message: "Lỗi server khi khóa user",
+
+    res.status(err.status || 500).json({
+      message: err.message || "Lỗi server khi khóa user",
     });
   }
 };
