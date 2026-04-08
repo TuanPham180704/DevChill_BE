@@ -1,5 +1,6 @@
 import pool from "../../config/db.js";
 import bcrypt from "bcrypt";
+import validator from "validator";
 import { sendLockEmail } from "../../utils/sendLockEmail.js";
 import { sendUnlockEmail } from "../../utils/sendUnlockEmail.js";
 
@@ -50,23 +51,42 @@ export async function updateUser(id, data) {
   const fields = [];
   const values = [];
   let index = 1;
-
   if (data.email) {
+    // validate format
+    if (!validator.isEmail(data.email)) {
+      const err = new Error("Email không hợp lệ");
+      err.status = 400;
+      throw err;
+    }
+    const existing = await pool.query(
+      "SELECT id FROM users WHERE email = $1 AND id != $2",
+      [data.email, id],
+    );
+
+    if (existing.rows.length > 0) {
+      const err = new Error("Email đã tồn tại");
+      err.status = 409;
+      throw err;
+    }
+
     fields.push(`email=$${index++}`);
     values.push(data.email);
   }
 
   if (data.password) {
+    if (data.password.length < 8) {
+      const err = new Error("Password phải >= 8 ký tự");
+      err.status = 400;
+      throw err;
+    }
     const hash = await bcrypt.hash(data.password, SALT);
     fields.push(`password=$${index++}`);
     values.push(hash);
   }
-
   if (typeof data.is_premium === "boolean") {
     fields.push(`is_premium=$${index++}`);
     values.push(data.is_premium);
   }
-
   if (typeof data.is_locked === "boolean") {
     fields.push(`is_locked=$${index++}`);
     values.push(data.is_locked);
@@ -80,21 +100,32 @@ export async function updateUser(id, data) {
     fields.push(`role=$${index++}`);
     values.push(data.role);
   }
-  if (!fields.length) return null;
-
-  values.push(id);
-
-  const res = await pool.query(
-    `UPDATE users SET ${fields.join(", ")} WHERE id=$${index} RETURNING *`,
-    values,
-  );
-  if (res.rows.length === 0) {
-    const err = new Error("User không tồn tại");
-    err.status = 404;
+  if (!fields.length) {
+    const err = new Error("No fields to update");
+    err.status = 400;
     throw err;
   }
+  values.push(id);
+  try {
+    const res = await pool.query(
+      `UPDATE users SET ${fields.join(", ")} WHERE id=$${index} RETURNING *`,
+      values,
+    );
+    if (res.rows.length === 0) {
+      const err = new Error("User không tồn tại");
+      err.status = 404;
+      throw err;
+    }
 
-  return res.rows[0];
+    return res.rows[0];
+  } catch (error) {
+    if (error.code === "23505") {
+      const err = new Error("Email đã tồn tại");
+      err.status = 409;
+      throw err;
+    }
+    throw error;
+  }
 }
 
 export async function lockUser(id, { lock_until, block_reason }) {

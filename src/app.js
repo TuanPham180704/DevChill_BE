@@ -3,10 +3,11 @@ import morgan from "morgan";
 import cors from "cors";
 import dotenv from "dotenv";
 import bodyParser from "body-parser";
+import "./services/cron/unlockUsersCron.js";
 import authRoutes from "./routes/authRoutes.js";
 
 import adminUserRoutes from "./routes/Admin/userAdRoutes.js";
-
+import adminContractRoutes from "./routes/Admin/contractRoutes.js";
 import profileRoutes from "./routes/Users/userRoutes.js";
 dotenv.config();
 
@@ -23,7 +24,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use("/api/auth", authRoutes);
 
 app.use("/api/admin/users", adminUserRoutes);
-
+app.use("/api/admin/contract", adminContractRoutes);
 
 app.use("/api/profile", profileRoutes);
 
