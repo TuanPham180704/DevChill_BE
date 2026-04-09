@@ -77,11 +77,9 @@ const initTables = async () => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS movies (
         id SERIAL PRIMARY KEY,
-
         name TEXT NOT NULL,
         origin_name TEXT,
         slug TEXT UNIQUE NOT NULL,
-
         content TEXT,
         poster_url TEXT,
         thumb_url TEXT,
@@ -93,24 +91,20 @@ const initTables = async () => {
 
         production_status VARCHAR(20),
         is_available BOOLEAN DEFAULT TRUE,
-
+        is_premium BOOLEAN DEFAULT FALSE,
         year INTEGER,
         quality VARCHAR(50),
         lang VARCHAR(50),
         duration VARCHAR(50),
         episode_total INTEGER,
 
-        tmdb_id VARCHAR(50),
+        tmdb_id VARCHAR(50) UNIQUE,
         source VARCHAR(50),
-
-        rating FLOAT DEFAULT 0,
-        rating_count INTEGER DEFAULT 0,
-
         view INTEGER DEFAULT 0,
         last_viewed_at TIMESTAMP,
 
         created_by INTEGER REFERENCES users(id),
-
+        contract_id INTEGER REFERENCES contracts(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -176,7 +170,7 @@ const initTables = async () => {
         season INTEGER DEFAULT 1,
         episode_number INTEGER,
         name VARCHAR(100),
-        slug TEXT UNIQUE,
+        slug TEXT ,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(movie_id, season, episode_number)
       );

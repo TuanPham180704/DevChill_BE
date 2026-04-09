@@ -8,6 +8,8 @@ import authRoutes from "./routes/authRoutes.js";
 
 import adminUserRoutes from "./routes/Admin/userAdRoutes.js";
 import adminContractRoutes from "./routes/Admin/contractRoutes.js";
+import adminMovieRoutes from "./routes/Admin/movieRoutes.js";
+
 import profileRoutes from "./routes/Users/userRoutes.js";
 dotenv.config();
 
@@ -25,6 +27,7 @@ app.use("/api/auth", authRoutes);
 
 app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/contract", adminContractRoutes);
+app.use("/api/admin/movies", adminMovieRoutes);
 
 app.use("/api/profile", profileRoutes);
 
