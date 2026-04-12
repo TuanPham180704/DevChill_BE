@@ -26,7 +26,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use("/api/auth", authRoutes);
 
 app.use("/api/admin/users", adminUserRoutes);
-app.use("/api/admin/contract", adminContractRoutes);
+app.use("/api/admin/contracts", adminContractRoutes);
 app.use("/api/admin/movies", adminMovieRoutes);
 
 app.use("/api/profile", profileRoutes);

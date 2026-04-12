@@ -49,7 +49,7 @@ export const updateMovie = async (req, res) => {
 };
 export const getAllMovies = async (req, res) => {
   try {
-    const { q, page, limit } = req.query;
+    const { q, page, limit, country, category } = req.query;
 
     const pageNum = page ? parseInt(page) : 1;
     const limitNum = limit ? parseInt(limit) : 10;
@@ -58,6 +58,8 @@ export const getAllMovies = async (req, res) => {
       q,
       page: pageNum,
       limit: limitNum,
+      country,
+      category,
     });
 
     res.json({

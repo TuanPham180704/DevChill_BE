@@ -520,26 +520,55 @@ export const getMovieById = async (id) => {
   };
 };
 
-export const getAllMovies = async ({ q = "", page = 1, limit = 10 }) => {
+export const getAllMovies = async ({
+  q = "",
+  page = 1,
+  limit = 10,
+  country,
+}) => {
   page = parseInt(page);
   limit = parseInt(limit);
   const offset = (page - 1) * limit;
 
-  let where = "";
+  const conditions = [];
   const values = [];
+  let idx = 1;
+
   if (q) {
-    where = "WHERE name ILIKE $1";
+    conditions.push(`m.name ILIKE $${idx++}`);
     values.push(`%${q}%`);
   }
 
+  if (country) {
+    conditions.push(`co.slug = $${idx++}`);
+    values.push(country);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
   const totalRes = await pool.query(
-    `SELECT COUNT(*) FROM movies ${where}`,
+    `
+    SELECT COUNT(DISTINCT m.id)
+    FROM movies m
+    LEFT JOIN movie_countries mc ON m.id = mc.movie_id
+    LEFT JOIN countries co ON mc.country_id = co.id
+    ${where}
+    `,
     values,
   );
+
   const total = parseInt(totalRes.rows[0].count);
 
   const res = await pool.query(
-    `SELECT * FROM movies ${where} ORDER BY created_at DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+    `
+    SELECT DISTINCT m.*
+    FROM movies m
+    LEFT JOIN movie_countries mc ON m.id = mc.movie_id
+    LEFT JOIN countries co ON mc.country_id = co.id
+    ${where}
+    ORDER BY m.created_at DESC
+    LIMIT $${idx++} OFFSET $${idx++}
+    `,
     [...values, limit, offset],
   );
 
