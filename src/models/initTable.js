@@ -34,6 +34,7 @@ const initTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS email_verifications (
         id SERIAL PRIMARY KEY,
@@ -45,6 +46,7 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS audit_logs (
         id BIGSERIAL PRIMARY KEY,
@@ -60,6 +62,7 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS contracts (
         id SERIAL PRIMARY KEY,
@@ -74,6 +77,7 @@ const initTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS movies (
         id SERIAL PRIMARY KEY,
@@ -109,6 +113,7 @@ const initTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS countries (
         id SERIAL PRIMARY KEY,
@@ -124,6 +129,7 @@ const initTables = async () => {
         PRIMARY KEY (movie_id, country_id)
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS categories (
         id SERIAL PRIMARY KEY,
@@ -139,6 +145,7 @@ const initTables = async () => {
         PRIMARY KEY (movie_id, category_id)
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS people (
         id SERIAL PRIMARY KEY,
@@ -155,14 +162,17 @@ const initTables = async () => {
         PRIMARY KEY (movie_id, person_id, role)
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS servers (
         id SERIAL PRIMARY KEY,
-        movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
         name VARCHAR(100) NOT NULL,
-        type VARCHAR(50) NOT NULL
+        type VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(name, type)
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS episodes (
         id SERIAL PRIMARY KEY,
@@ -170,11 +180,13 @@ const initTables = async () => {
         season INTEGER DEFAULT 1,
         episode_number INTEGER,
         name VARCHAR(100),
-        slug TEXT ,
+        slug TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(movie_id, season, episode_number)
       );
     `);
+
+    /* 🔥 FIX CHÍNH Ở ĐÂY */
     await pool.query(`
       CREATE TABLE IF NOT EXISTS episode_streams (
         id SERIAL PRIMARY KEY,
@@ -182,13 +194,20 @@ const initTables = async () => {
         server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
 
         quality VARCHAR(50),
+
+        lang VARCHAR(20) DEFAULT 'vietsub'
+          CHECK (lang IN ('vietsub', 'dub', 'raw')),
+
         link_embed TEXT,
         link_m3u8 TEXT,
+
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        -- chuẩn: mỗi server chỉ 1 quality / episode
-        UNIQUE (episode_id, server_id, quality)
+
+        -- 🔥 FIX UNIQUE
+        UNIQUE (episode_id, server_id, quality, lang)
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS messages (
         id BIGSERIAL PRIMARY KEY,
@@ -201,6 +220,7 @@ const initTables = async () => {
         updated_at TIMESTAMP
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS contract_movies (
         contract_id INTEGER REFERENCES contracts(id) ON DELETE CASCADE,
@@ -208,6 +228,7 @@ const initTables = async () => {
         PRIMARY KEY (contract_id, movie_id)
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS watch_history (
         id SERIAL PRIMARY KEY,
@@ -217,22 +238,20 @@ const initTables = async () => {
         watched_duration INTEGER,
         total_duration INTEGER,
         progress FLOAT,
-
         last_watched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
         UNIQUE (user_id, episode_id)
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS favorites (
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
-
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
         PRIMARY KEY (user_id, movie_id)
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS plans (
         id SERIAL PRIMARY KEY,
@@ -242,6 +261,7 @@ const initTables = async () => {
         status VARCHAR(20) DEFAULT 'active'
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS subscriptions (
         id SERIAL PRIMARY KEY,
@@ -252,6 +272,7 @@ const initTables = async () => {
         status VARCHAR(20)
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS payments (
         id SERIAL PRIMARY KEY,
@@ -261,10 +282,10 @@ const initTables = async () => {
         payment_method VARCHAR(50),
         status VARCHAR(20),
         transaction_code VARCHAR(100),
-
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_movies_tmdb ON movies(tmdb_id);`,
     );
@@ -289,10 +310,7 @@ const initTables = async () => {
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_movie_country ON movie_countries(country_id);`,
     );
-    await pool.query(`
-  CREATE UNIQUE INDEX IF NOT EXISTS unique_server_idx
-  ON servers (movie_id, LOWER(name), LOWER(type));
-`);
+
     console.log(" FINAL DB READY (PRODUCTION) ✅");
   } catch (err) {
     console.error(" Error:", err);

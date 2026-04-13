@@ -8,7 +8,7 @@ import authRoutes from "./routes/authRoutes.js";
 
 import adminUserRoutes from "./routes/Admin/userAdRoutes.js";
 import adminContractRoutes from "./routes/Admin/contractRoutes.js";
-import adminMovieRoutes from "./routes/Admin/movieRoutes.js";
+import adminMovieRoutes from "./routes/Admin/Movies/movieRoutes.js";
 
 import profileRoutes from "./routes/Users/userRoutes.js";
 dotenv.config();
