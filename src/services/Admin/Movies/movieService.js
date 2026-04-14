@@ -188,13 +188,14 @@ export const getById = async (id) => {
     [id],
   );
 
+  /* 🔥 FIX CHỈ Ở ĐÂY */
   const episodes = await pool.query(
     `SELECT e.*, 
       COALESCE(
         json_agg(
           json_build_object(
             'id', es.id,
-            'server_id', es.server_id,
+            'server_name', s.name,  -- 🔥 đổi từ server_id -> server_name
             'quality', es.quality,
             'lang', es.lang,
             'link_embed', es.link_embed,
@@ -205,6 +206,7 @@ export const getById = async (id) => {
       ) AS streams
      FROM episodes e
      LEFT JOIN episode_streams es ON es.episode_id = e.id
+     LEFT JOIN servers s ON s.id = es.server_id   -- 🔥 JOIN thêm
      WHERE e.movie_id=$1
      GROUP BY e.id
      ORDER BY e.season, e.episode_number`,
@@ -349,6 +351,7 @@ export const updateMedia = async (movieId, data) => {
 
     const { poster_url, thumb_url, trailer_url, episodes } = data;
 
+    /* ================= UPDATE MOVIE MEDIA ================= */
     if (poster_url || thumb_url || trailer_url) {
       await client.query(
         `UPDATE movies SET
@@ -360,38 +363,80 @@ export const updateMedia = async (movieId, data) => {
       );
     }
 
-    if (episodes) {
+    /* ================= HELPER: SERVER ================= */
+    const getOrCreateServer = async (server_name, type = "embed") => {
+      if (!server_name) return null;
+
+      const find = await client.query(
+        `SELECT id FROM servers WHERE name=$1 AND type=$2`,
+        [server_name, type],
+      );
+
+      if (find.rows.length) return find.rows[0].id;
+
+      const insert = await client.query(
+        `INSERT INTO servers(name, type)
+         VALUES($1,$2)
+         RETURNING id`,
+        [server_name, type],
+      );
+
+      return insert.rows[0].id;
+    };
+
+    /* ================= EPISODES SYNC ================= */
+    if (episodes && Array.isArray(episodes)) {
       for (const ep of episodes) {
         if (!ep?.episode_number) continue;
 
         const epSlug = toSlug(ep.name || `tap-${ep.episode_number}`);
 
+        /* UPSERT EPISODE */
         const epRes = await client.query(
           `INSERT INTO episodes(movie_id, season, episode_number, name, slug)
            VALUES($1,$2,$3,$4,$5)
            ON CONFLICT (movie_id, season, episode_number)
-           DO UPDATE SET name=EXCLUDED.name
+           DO UPDATE SET name = EXCLUDED.name
            RETURNING id`,
-          [movieId, ep.season || 1, ep.episode_number, ep.name, epSlug],
+          [movieId, ep.season || 1, ep.episode_number, ep.name || "", epSlug],
         );
 
         const epId = epRes.rows[0].id;
 
+        /* 🔥 IMPORTANT: CLEAR OLD STREAMS */
+        await client.query(`DELETE FROM episode_streams WHERE episode_id=$1`, [
+          epId,
+        ]);
+
+        /* ================= STREAMS ================= */
         for (const st of ep.streams || []) {
-          if (!st?.server_id || !st?.quality) continue;
+          if (!st?.quality) continue;
+
+          let serverId = st.server_id;
+
+          // support server_name fallback
+          if (!serverId && st.server_name) {
+            serverId = await getOrCreateServer(
+              st.server_name,
+              st.type || "embed",
+            );
+          }
+
+          if (!serverId) continue;
 
           await client.query(
             `INSERT INTO episode_streams(
-              episode_id, server_id, quality, lang, link_embed, link_m3u8
+              episode_id,
+              server_id,
+              quality,
+              lang,
+              link_embed,
+              link_m3u8
             )
-             VALUES($1,$2,$3,$4,$5,$6)
-             ON CONFLICT (episode_id, server_id, quality, lang)
-             DO UPDATE SET
-               link_embed = EXCLUDED.link_embed,
-               link_m3u8 = EXCLUDED.link_m3u8`,
+            VALUES($1,$2,$3,$4,$5,$6)`,
             [
               epId,
-              st.server_id,
+              serverId,
               st.quality,
               st.lang || "vietsub",
               st.link_embed || null,
