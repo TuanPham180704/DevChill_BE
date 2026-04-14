@@ -1,13 +1,12 @@
 import * as movieService from "../../../services/Admin/Movies/movieService.js";
 
-/* ================= CREATE ================= */
 export const createMovie = async (req, res) => {
   try {
-    const id = await movieService.createMovie(req.body);
+    const movie = await movieService.createMovie(req.body);
 
     res.status(201).json({
       success: true,
-      data: { movie_id: id },
+      data: { movie_id: movie.id },
     });
   } catch (err) {
     res.status(err.status || 400).json({
@@ -17,14 +16,18 @@ export const createMovie = async (req, res) => {
   }
 };
 
-/* ================= UPDATE INFO ================= */
 export const updateInfo = async (req, res) => {
   try {
     const movie = await movieService.updateInfo(req.params.id, req.body);
-
+    if (!movie) {
+      return res.status(400).json({
+        success: false,
+        message: "No fields to update",
+      });
+    }
     res.json({
       success: true,
-      data: movie, // 🔥 trả luôn data giống contract
+      data: movie,
     });
   } catch (err) {
     res.status(err.status || 400).json({
@@ -33,8 +36,6 @@ export const updateInfo = async (req, res) => {
     });
   }
 };
-
-/* ================= UPDATE META ================= */
 export const updateMeta = async (req, res) => {
   try {
     const movie = await movieService.updateMeta(req.params.id, req.body);
@@ -50,8 +51,6 @@ export const updateMeta = async (req, res) => {
     });
   }
 };
-
-/* ================= UPDATE MEDIA ================= */
 export const updateMedia = async (req, res) => {
   try {
     const movie = await movieService.updateMedia(req.params.id, req.body);
@@ -68,7 +67,6 @@ export const updateMedia = async (req, res) => {
   }
 };
 
-/* ================= UPDATE SETTING ================= */
 export const updateSetting = async (req, res) => {
   try {
     const movie = await movieService.updateSetting(req.params.id, req.body);
@@ -85,7 +83,6 @@ export const updateSetting = async (req, res) => {
   }
 };
 
-/* ================= GET ALL ================= */
 export const getAll = async (req, res) => {
   try {
     const result = await movieService.getAll(req.query);
@@ -103,7 +100,6 @@ export const getAll = async (req, res) => {
   }
 };
 
-/* ================= GET BY ID ================= */
 export const getById = async (req, res) => {
   try {
     const movie = await movieService.getById(req.params.id);
@@ -119,8 +115,6 @@ export const getById = async (req, res) => {
     });
   }
 };
-
-/* ================= RECOMMEND ================= */
 export const recommend = async (req, res) => {
   try {
     const movies = await movieService.recommend(req.params.id);

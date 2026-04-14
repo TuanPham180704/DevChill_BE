@@ -1,6 +1,5 @@
 import pool from "../../../config/db.js";
 
-/* ================= HELPER: SLUG ================= */
 const toSlug = (str = "") =>
   str
     .toLowerCase()
@@ -11,37 +10,72 @@ const toSlug = (str = "") =>
     .trim()
     .replace(/\s+/g, "-");
 
-/* ================= CREATE ================= */
+const validateMovieData = (data, isCreate = false) => {
+  if (isCreate) {
+    if (!data.name) throw new Error("name is required");
+    if (!data.contract_id) throw new Error("contract_id is required");
+  }
+
+  if (data.year && isNaN(data.year)) {
+    throw new Error("year must be a number");
+  }
+
+  if (data.episode_total && isNaN(data.episode_total)) {
+    throw new Error("episode_total must be a number");
+  }
+
+  if (data.duration && isNaN(data.duration)) {
+    throw new Error("duration must be a number");
+  }
+};
+
 export const createMovie = async (data) => {
+  validateMovieData(data, true);
+
   const slug = toSlug(data.name);
 
   const res = await pool.query(
-    `INSERT INTO movies(name, origin_name, slug, content, type, year, duration, episode_total, created_by)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `INSERT INTO movies(
+      name, origin_name, slug, content, type, year,
+      duration, episode_total, created_by, contract_id
+    )
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
      RETURNING *`,
     [
       data.name,
-      data.origin_name,
+      data.origin_name || null,
       slug,
-      data.content,
-      data.type,
-      data.year,
-      data.duration,
-      data.episode_total,
-      data.created_by,
+      data.content || null,
+      data.type || null,
+      data.year || null,
+      data.duration || null,
+      data.episode_total || null,
+      data.created_by || null,
+      data.contract_id,
     ],
   );
 
   return res.rows[0];
 };
 
-/* ================= UPDATE INFO ================= */
 export const updateInfo = async (id, data) => {
+  validateMovieData(data);
+
   const fields = [];
   const values = [];
   let i = 1;
 
-  if (data.name) {
+  const allowedFields = [
+    "name",
+    "origin_name",
+    "content",
+    "type",
+    "year",
+    "duration",
+    "episode_total",
+  ];
+
+  if (data.name !== undefined) {
     fields.push(`name=$${i++}`);
     values.push(data.name);
 
@@ -49,10 +83,13 @@ export const updateInfo = async (id, data) => {
     values.push(toSlug(data.name));
   }
 
-  for (const key of Object.keys(data)) {
+  for (const key of allowedFields) {
     if (key === "name") continue;
-    fields.push(`${key}=$${i++}`);
-    values.push(data[key]);
+
+    if (data[key] !== undefined) {
+      fields.push(`${key}=$${i++}`);
+      values.push(data[key]);
+    }
   }
 
   if (!fields.length) return null;
@@ -61,8 +98,8 @@ export const updateInfo = async (id, data) => {
 
   const res = await pool.query(
     `UPDATE movies 
-     SET ${fields.join(", ")}, updated_at=NOW()
-     WHERE id=$${i}
+     SET ${fields.join(", ")}, updated_at = NOW()
+     WHERE id = $${i}
      RETURNING *`,
     values,
   );
@@ -70,10 +107,9 @@ export const updateInfo = async (id, data) => {
   return res.rows[0];
 };
 
-/* ================= GET ALL ================= */
 export const getAll = async (query) => {
-  const page = parseInt(query.page) || 1;
-  const limit = parseInt(query.limit) || 10;
+  const page = Math.max(parseInt(query.page) || 1, 1);
+  const limit = Math.min(parseInt(query.limit) || 10, 50);
   const offset = (page - 1) * limit;
 
   const { keyword, status, type } = query;
@@ -124,17 +160,13 @@ export const getAll = async (query) => {
     },
   };
 };
-
-/* ================= GET BY ID ================= */
 export const getById = async (id) => {
-  // movie
   const movieRes = await pool.query(`SELECT * FROM movies WHERE id=$1`, [id]);
 
   if (!movieRes.rows.length) return null;
 
   const movie = movieRes.rows[0];
 
-  // categories
   const categories = await pool.query(
     `SELECT c.* FROM categories c
      JOIN movie_categories mc ON mc.category_id = c.id
@@ -142,7 +174,6 @@ export const getById = async (id) => {
     [id],
   );
 
-  // countries
   const countries = await pool.query(
     `SELECT c.* FROM countries c
      JOIN movie_countries mc ON mc.country_id = c.id
@@ -150,7 +181,6 @@ export const getById = async (id) => {
     [id],
   );
 
-  // people
   const people = await pool.query(
     `SELECT p.*, mp.role FROM people p
      JOIN movie_people mp ON mp.person_id = p.id
@@ -158,18 +188,20 @@ export const getById = async (id) => {
     [id],
   );
 
-  // episodes + streams
   const episodes = await pool.query(
     `SELECT e.*, 
-      json_agg(
-        json_build_object(
-          'id', es.id,
-          'server_id', es.server_id,
-          'quality', es.quality,
-          'lang', es.lang,
-          'link_embed', es.link_embed,
-          'link_m3u8', es.link_m3u8
-        )
+      COALESCE(
+        json_agg(
+          json_build_object(
+            'id', es.id,
+            'server_id', es.server_id,
+            'quality', es.quality,
+            'lang', es.lang,
+            'link_embed', es.link_embed,
+            'link_m3u8', es.link_m3u8
+          )
+        ) FILTER (WHERE es.id IS NOT NULL),
+        '[]'
       ) AS streams
      FROM episodes e
      LEFT JOIN episode_streams es ON es.episode_id = e.id
@@ -188,7 +220,6 @@ export const getById = async (id) => {
   };
 };
 
-/* ================= UPDATE META ================= */
 export const updateMeta = async (
   movieId,
   { categories, countries, people },
@@ -198,10 +229,12 @@ export const updateMeta = async (
   try {
     await client.query("BEGIN");
 
-    const getOrCreate = async (table, items) => {
+    const getOrCreate = async (table, items = []) => {
       const ids = [];
 
       for (const item of items) {
+        if (!item?.name) continue;
+
         const slug = toSlug(item.name);
 
         let res = await client.query(`SELECT id FROM ${table} WHERE slug=$1`, [
@@ -264,6 +297,8 @@ export const updateMeta = async (
       ]);
 
       for (const p of people) {
+        if (!p?.name) continue;
+
         const slug = toSlug(p.name);
 
         let res = await client.query(`SELECT id FROM people WHERE slug=$1`, [
@@ -279,12 +314,14 @@ export const updateMeta = async (
             [p.name, slug],
           );
           personId = insert.rows[0].id;
-        } else personId = res.rows[0].id;
+        } else {
+          personId = res.rows[0].id;
+        }
 
         await client.query(
           `INSERT INTO movie_people(movie_id, person_id, role)
            VALUES($1,$2,$3)`,
-          [movieId, personId, p.role],
+          [movieId, personId, p.role || null],
         );
       }
     }
@@ -294,6 +331,7 @@ export const updateMeta = async (
     const result = await pool.query(`SELECT * FROM movies WHERE id=$1`, [
       movieId,
     ]);
+
     return result.rows[0];
   } catch (e) {
     await client.query("ROLLBACK");
@@ -303,7 +341,6 @@ export const updateMeta = async (
   }
 };
 
-/* ================= UPDATE MEDIA ================= */
 export const updateMedia = async (movieId, data) => {
   const client = await pool.connect();
 
@@ -325,7 +362,9 @@ export const updateMedia = async (movieId, data) => {
 
     if (episodes) {
       for (const ep of episodes) {
-        const epSlug = toSlug(ep.name);
+        if (!ep?.episode_number) continue;
+
+        const epSlug = toSlug(ep.name || `tap-${ep.episode_number}`);
 
         const epRes = await client.query(
           `INSERT INTO episodes(movie_id, season, episode_number, name, slug)
@@ -339,6 +378,8 @@ export const updateMedia = async (movieId, data) => {
         const epId = epRes.rows[0].id;
 
         for (const st of ep.streams || []) {
+          if (!st?.server_id || !st?.quality) continue;
+
           await client.query(
             `INSERT INTO episode_streams(
               episode_id, server_id, quality, lang, link_embed, link_m3u8
@@ -353,8 +394,8 @@ export const updateMedia = async (movieId, data) => {
               st.server_id,
               st.quality,
               st.lang || "vietsub",
-              st.link_embed,
-              st.link_m3u8,
+              st.link_embed || null,
+              st.link_m3u8 || null,
             ],
           );
         }
@@ -366,6 +407,7 @@ export const updateMedia = async (movieId, data) => {
     const result = await pool.query(`SELECT * FROM movies WHERE id=$1`, [
       movieId,
     ]);
+
     return result.rows[0];
   } catch (e) {
     await client.query("ROLLBACK");
@@ -375,23 +417,20 @@ export const updateMedia = async (movieId, data) => {
   }
 };
 
-/* ================= UPDATE SETTING ================= */
 export const updateSetting = async (movieId, data) => {
   const res = await pool.query(
     `UPDATE movies SET
-      status=$1,
-      is_available=$2,
-      is_premium=$3,
-      contract_id=$4,
-      source=$5,
-      tmdb_id=$6
-     WHERE id=$7
+      status = COALESCE($1, status),
+      is_available = COALESCE($2, is_available),
+      is_premium = COALESCE($3, is_premium),
+      source = COALESCE($4, source),
+      tmdb_id = COALESCE($5, tmdb_id)
+     WHERE id=$6
      RETURNING *`,
     [
       data.status,
       data.is_available,
       data.is_premium,
-      data.contract_id,
       data.source,
       data.tmdb_id,
       movieId,
@@ -399,4 +438,16 @@ export const updateSetting = async (movieId, data) => {
   );
 
   return res.rows[0];
+};
+
+export const recommend = async (movieId) => {
+  const res = await pool.query(
+    `SELECT * FROM movies
+     WHERE id != $1
+     ORDER BY RANDOM()
+     LIMIT 10`,
+    [movieId],
+  );
+
+  return res.rows;
 };

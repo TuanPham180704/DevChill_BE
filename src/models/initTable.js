@@ -185,8 +185,6 @@ const initTables = async () => {
         UNIQUE(movie_id, season, episode_number)
       );
     `);
-
-    /* 🔥 FIX CHÍNH Ở ĐÂY */
     await pool.query(`
       CREATE TABLE IF NOT EXISTS episode_streams (
         id SERIAL PRIMARY KEY,
@@ -197,13 +195,10 @@ const initTables = async () => {
 
         lang VARCHAR(20) DEFAULT 'vietsub'
           CHECK (lang IN ('vietsub', 'dub', 'raw')),
-
         link_embed TEXT,
         link_m3u8 TEXT,
 
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-        -- 🔥 FIX UNIQUE
         UNIQUE (episode_id, server_id, quality, lang)
       );
     `);
