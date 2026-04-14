@@ -187,15 +187,13 @@ export const getById = async (id) => {
      WHERE mp.movie_id=$1`,
     [id],
   );
-
-  /* 🔥 FIX CHỈ Ở ĐÂY */
   const episodes = await pool.query(
     `SELECT e.*, 
       COALESCE(
         json_agg(
           json_build_object(
             'id', es.id,
-            'server_name', s.name,  -- 🔥 đổi từ server_id -> server_name
+            'server_name', s.name,  
             'quality', es.quality,
             'lang', es.lang,
             'link_embed', es.link_embed,
@@ -206,7 +204,7 @@ export const getById = async (id) => {
       ) AS streams
      FROM episodes e
      LEFT JOIN episode_streams es ON es.episode_id = e.id
-     LEFT JOIN servers s ON s.id = es.server_id   -- 🔥 JOIN thêm
+     LEFT JOIN servers s ON s.id = es.server_id   
      WHERE e.movie_id=$1
      GROUP BY e.id
      ORDER BY e.season, e.episode_number`,
@@ -362,8 +360,6 @@ export const updateMedia = async (movieId, data) => {
         [poster_url, thumb_url, trailer_url, movieId],
       );
     }
-
-    /* ================= HELPER: SERVER ================= */
     const getOrCreateServer = async (server_name, type = "embed") => {
       if (!server_name) return null;
 
@@ -383,15 +379,11 @@ export const updateMedia = async (movieId, data) => {
 
       return insert.rows[0].id;
     };
-
-    /* ================= EPISODES SYNC ================= */
     if (episodes && Array.isArray(episodes)) {
       for (const ep of episodes) {
         if (!ep?.episode_number) continue;
 
         const epSlug = toSlug(ep.name || `tap-${ep.episode_number}`);
-
-        /* UPSERT EPISODE */
         const epRes = await client.query(
           `INSERT INTO episodes(movie_id, season, episode_number, name, slug)
            VALUES($1,$2,$3,$4,$5)
@@ -402,28 +394,20 @@ export const updateMedia = async (movieId, data) => {
         );
 
         const epId = epRes.rows[0].id;
-
-        /* 🔥 IMPORTANT: CLEAR OLD STREAMS */
         await client.query(`DELETE FROM episode_streams WHERE episode_id=$1`, [
           epId,
         ]);
-
-        /* ================= STREAMS ================= */
         for (const st of ep.streams || []) {
           if (!st?.quality) continue;
 
           let serverId = st.server_id;
-
-          // support server_name fallback
           if (!serverId && st.server_name) {
             serverId = await getOrCreateServer(
               st.server_name,
               st.type || "embed",
             );
           }
-
           if (!serverId) continue;
-
           await client.query(
             `INSERT INTO episode_streams(
               episode_id,
@@ -446,13 +430,10 @@ export const updateMedia = async (movieId, data) => {
         }
       }
     }
-
     await client.query("COMMIT");
-
     const result = await pool.query(`SELECT * FROM movies WHERE id=$1`, [
       movieId,
     ]);
-
     return result.rows[0];
   } catch (e) {
     await client.query("ROLLBACK");
@@ -484,7 +465,6 @@ export const updateSetting = async (movieId, data) => {
 
   return res.rows[0];
 };
-
 export const recommend = async (movieId) => {
   const res = await pool.query(
     `SELECT * FROM movies
