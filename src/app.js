@@ -8,9 +8,11 @@ import authRoutes from "./routes/authRoutes.js";
 
 import adminUserRoutes from "./routes/Admin/userAdRoutes.js";
 import adminContractRoutes from "./routes/Admin/contractRoutes.js";
-import adminMovieRoutes from "./routes/Admin/Movies/movieRoutes.js";
+import adminMovieRoutes from "./routes/Admin/Movies/movieAdminRoutes.js";
 
 import profileRoutes from "./routes/Users/userRoutes.js";
+
+import publicMoviesRoutes from "./routes/moviePublicRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -30,6 +32,8 @@ app.use("/api/admin/contracts", adminContractRoutes);
 app.use("/api/admin/movies", adminMovieRoutes);
 
 app.use("/api/profile", profileRoutes);
+
+app.use("/api/movies", publicMoviesRoutes);
 
 app.get("/", (req, res) => {
   res.send("DevChill");
