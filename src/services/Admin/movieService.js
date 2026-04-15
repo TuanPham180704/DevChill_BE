@@ -9,6 +9,9 @@ const toSlug = (str = "") =>
     .replace(/[^a-z0-9\s-]/g, "")
     .trim()
     .replace(/\s+/g, "-");
+const LIFECYCLES = ["upcoming", "ongoing", "completed"];
+const STATUSES = ["draft", "published", "hidden"];
+const PRODUCTION_STATUSES = ["planning", "filming", "post-production"];
 
 const validateMovieData = (data, isCreate = false) => {
   if (isCreate) {
@@ -16,16 +19,27 @@ const validateMovieData = (data, isCreate = false) => {
     if (!data.contract_id) throw new Error("contract_id is required");
   }
 
-  if (data.year && isNaN(data.year)) {
+  if (data.year && isNaN(Number(data.year))) {
     throw new Error("year must be a number");
   }
 
-  if (data.episode_total && isNaN(data.episode_total)) {
+  if (data.episode_total && isNaN(Number(data.episode_total))) {
     throw new Error("episode_total must be a number");
   }
 
-  if (data.duration && isNaN(data.duration)) {
-    throw new Error("duration must be a number");
+  if (data.lifecycle_status && !LIFECYCLES.includes(data.lifecycle_status)) {
+    throw new Error("invalid lifecycle_status");
+  }
+
+  if (data.status && !STATUSES.includes(data.status)) {
+    throw new Error("invalid status");
+  }
+
+  if (
+    data.production_status &&
+    !PRODUCTION_STATUSES.includes(data.production_status)
+  ) {
+    throw new Error("invalid production_status");
   }
 };
 
@@ -38,9 +52,15 @@ export const createMovie = async (data) => {
     `INSERT INTO movies(
       name, origin_name, slug, content, type, year,
       duration, episode_total, created_by, contract_id,
-      status, is_available, is_premium
+
+      status,
+      lifecycle_status,
+      production_status,
+
+      is_available,
+      is_premium
     )
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
     RETURNING *`,
     [
       data.name,
@@ -53,9 +73,13 @@ export const createMovie = async (data) => {
       data.episode_total || null,
       data.created_by || null,
       data.contract_id,
-      "draft",
-      false,
-      false,
+
+      data.status || "draft",
+      data.lifecycle_status || "upcoming",
+      data.production_status || null,
+
+      data.is_available ?? true,
+      data.is_premium ?? false,
     ],
   );
 
@@ -116,47 +140,58 @@ export const getAll = async (query) => {
   const limit = Math.min(parseInt(query.limit) || 10, 50);
   const offset = (page - 1) * limit;
 
-  const { keyword, status, type, year, category, country } = query;
+  const { keyword, status, type, year, category, country, lifecycle_status } =
+    query;
 
   let where = [];
   let values = [];
   let i = 1;
+
   if (keyword) {
     where.push(`(m.name ILIKE $${i} OR m.origin_name ILIKE $${i})`);
     values.push(`%${keyword}%`);
     i++;
   }
+
   if (status) {
     where.push(`m.status = $${i++}`);
     values.push(status);
   }
+
+  if (lifecycle_status) {
+    where.push(`m.lifecycle_status = $${i++}`);
+    values.push(lifecycle_status);
+  }
+
   if (type) {
     where.push(`m.type = $${i++}`);
     values.push(type);
   }
+
   if (year) {
     where.push(`m.year = $${i++}`);
     values.push(year);
   }
+
   if (category) {
     where.push(`cat.slug = $${i++}`);
     values.push(category);
   }
+
   if (country) {
     where.push(`c.slug = $${i++}`);
     values.push(country);
   }
+
   const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
   const dataQuery = `
     SELECT DISTINCT m.*
     FROM movies m
-
     LEFT JOIN movie_categories mc ON mc.movie_id = m.id
     LEFT JOIN categories cat ON cat.id = mc.category_id
-
     LEFT JOIN movie_countries mco ON mco.movie_id = m.id
     LEFT JOIN countries c ON c.id = mco.country_id
-
     ${whereSQL}
     ORDER BY m.created_at DESC
     LIMIT $${i++} OFFSET $${i}
@@ -165,13 +200,10 @@ export const getAll = async (query) => {
   const countQuery = `
     SELECT COUNT(DISTINCT m.id)
     FROM movies m
-
     LEFT JOIN movie_categories mc ON mc.movie_id = m.id
     LEFT JOIN categories cat ON cat.id = mc.category_id
-
     LEFT JOIN movie_countries mco ON mco.movie_id = m.id
     LEFT JOIN countries c ON c.id = mco.country_id
-
     ${whereSQL}
   `;
 
@@ -187,6 +219,7 @@ export const getAll = async (query) => {
     },
   };
 };
+
 export const getById = async (id) => {
   const movieRes = await pool.query(`SELECT * FROM movies WHERE id=$1`, [id]);
 
@@ -214,13 +247,14 @@ export const getById = async (id) => {
      WHERE mp.movie_id=$1`,
     [id],
   );
+
   const episodes = await pool.query(
     `SELECT e.*, 
       COALESCE(
         json_agg(
           json_build_object(
             'id', es.id,
-            'server_name', s.name,  
+            'server_name', s.name,
             'quality', es.quality,
             'lang', es.lang,
             'link_embed', es.link_embed,
@@ -231,7 +265,7 @@ export const getById = async (id) => {
       ) AS streams
      FROM episodes e
      LEFT JOIN episode_streams es ON es.episode_id = e.id
-     LEFT JOIN servers s ON s.id = es.server_id   
+     LEFT JOIN servers s ON s.id = es.server_id
      WHERE e.movie_id=$1
      GROUP BY e.id
      ORDER BY e.season, e.episode_number`,
@@ -270,11 +304,11 @@ export const updateMeta = async (
 
         let id;
 
-        if (res.rows.length) id = res.rows[0].id;
-        else {
+        if (res.rows.length) {
+          id = res.rows[0].id;
+        } else {
           const insert = await client.query(
-            `INSERT INTO ${table}(name, slug)
-             VALUES($1,$2) RETURNING id`,
+            `INSERT INTO ${table}(name, slug) VALUES($1,$2) RETURNING id`,
             [item.name, slug],
           );
           id = insert.rows[0].id;
@@ -336,8 +370,7 @@ export const updateMeta = async (
 
         if (!res.rows.length) {
           const insert = await client.query(
-            `INSERT INTO people(name, slug)
-             VALUES($1,$2) RETURNING id`,
+            `INSERT INTO people(name, slug) VALUES($1,$2) RETURNING id`,
             [p.name, slug],
           );
           personId = insert.rows[0].id;
@@ -367,7 +400,6 @@ export const updateMeta = async (
     client.release();
   }
 };
-
 export const updateMedia = async (movieId, data) => {
   const client = await pool.connect();
 
@@ -376,7 +408,6 @@ export const updateMedia = async (movieId, data) => {
 
     const { poster_url, thumb_url, trailer_url, episodes } = data;
 
-    /* ================= UPDATE MOVIE MEDIA ================= */
     if (poster_url || thumb_url || trailer_url) {
       await client.query(
         `UPDATE movies SET
@@ -387,12 +418,13 @@ export const updateMedia = async (movieId, data) => {
         [poster_url, thumb_url, trailer_url, movieId],
       );
     }
-    const getOrCreateServer = async (server_name, type = "embed") => {
-      if (!server_name) return null;
+
+    const getOrCreateServer = async (name, type = "embed") => {
+      if (!name) return null;
 
       const find = await client.query(
         `SELECT id FROM servers WHERE name=$1 AND type=$2`,
-        [server_name, type],
+        [name, type],
       );
 
       if (find.rows.length) return find.rows[0].id;
@@ -401,16 +433,18 @@ export const updateMedia = async (movieId, data) => {
         `INSERT INTO servers(name, type)
          VALUES($1,$2)
          RETURNING id`,
-        [server_name, type],
+        [name, type],
       );
 
       return insert.rows[0].id;
     };
+
     if (episodes && Array.isArray(episodes)) {
       for (const ep of episodes) {
         if (!ep?.episode_number) continue;
 
         const epSlug = toSlug(ep.name || `tap-${ep.episode_number}`);
+
         const epRes = await client.query(
           `INSERT INTO episodes(movie_id, season, episode_number, name, slug)
            VALUES($1,$2,$3,$4,$5)
@@ -421,20 +455,25 @@ export const updateMedia = async (movieId, data) => {
         );
 
         const epId = epRes.rows[0].id;
+
         await client.query(`DELETE FROM episode_streams WHERE episode_id=$1`, [
           epId,
         ]);
+
         for (const st of ep.streams || []) {
           if (!st?.quality) continue;
 
           let serverId = st.server_id;
+
           if (!serverId && st.server_name) {
             serverId = await getOrCreateServer(
               st.server_name,
               st.type || "embed",
             );
           }
+
           if (!serverId) continue;
+
           await client.query(
             `INSERT INTO episode_streams(
               episode_id,
@@ -457,10 +496,13 @@ export const updateMedia = async (movieId, data) => {
         }
       }
     }
+
     await client.query("COMMIT");
+
     const result = await pool.query(`SELECT * FROM movies WHERE id=$1`, [
       movieId,
     ]);
+
     return result.rows[0];
   } catch (e) {
     await client.query("ROLLBACK");
@@ -474,14 +516,18 @@ export const updateSetting = async (movieId, data) => {
   const res = await pool.query(
     `UPDATE movies SET
       status = COALESCE($1, status),
-      is_available = COALESCE($2, is_available),
-      is_premium = COALESCE($3, is_premium),
-      source = COALESCE($4, source),
-      tmdb_id = COALESCE($5, tmdb_id)
-     WHERE id=$6
+      lifecycle_status = COALESCE($2, lifecycle_status),
+      production_status = COALESCE($3, production_status),
+      is_available = COALESCE($4, is_available),
+      is_premium = COALESCE($5, is_premium),
+      source = COALESCE($6, source),
+      tmdb_id = COALESCE($7, tmdb_id)
+     WHERE id=$8
      RETURNING *`,
     [
       data.status,
+      data.lifecycle_status,
+      data.production_status,
       data.is_available,
       data.is_premium,
       data.source,

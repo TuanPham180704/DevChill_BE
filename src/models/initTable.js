@@ -79,40 +79,44 @@ const initTables = async () => {
     `);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS movies (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        origin_name TEXT,
-        slug TEXT UNIQUE NOT NULL,
-        content TEXT,
-        poster_url TEXT,
-        thumb_url TEXT,
-        trailer_url TEXT,
+    CREATE TABLE IF NOT EXISTS movies (
+    id SERIAL PRIMARY KEY,
 
-        type VARCHAR(20),
-        status VARCHAR(20) DEFAULT 'draft'
-          CHECK (status IN ('draft', 'published', 'hidden', 'completed')),
+    name TEXT NOT NULL,
+    origin_name TEXT,
+    slug TEXT UNIQUE NOT NULL,
+    content TEXT,
 
-        production_status VARCHAR(20),
-        is_available BOOLEAN DEFAULT TRUE,
-        is_premium BOOLEAN DEFAULT FALSE,
-        year INTEGER,
-        quality VARCHAR(50),
-        lang VARCHAR(50),
-        duration VARCHAR(50),
-        episode_total INTEGER,
+    poster_url TEXT,
+    thumb_url TEXT,
+    trailer_url TEXT,
 
-        tmdb_id VARCHAR(50) UNIQUE,
-        source VARCHAR(50),
-        view INTEGER DEFAULT 0,
-        last_viewed_at TIMESTAMP,
-
-        created_by INTEGER REFERENCES users(id),
-        contract_id INTEGER REFERENCES contracts(id),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+    type VARCHAR(20),
+    status VARCHAR(20) DEFAULT 'draft'
+      CHECK (status IN ('draft', 'published', 'hidden')),
+    lifecycle_status VARCHAR(20) DEFAULT 'upcoming'
+      CHECK (lifecycle_status IN ('upcoming', 'ongoing', 'completed')),
+    release_date TIMESTAMP,
+    end_date TIMESTAMP,
+   production_status VARCHAR(20)
+   CHECK (production_status IN ('planning', 'filming', 'post-production')),
+    is_available BOOLEAN DEFAULT TRUE,
+    is_premium BOOLEAN DEFAULT FALSE,
+    year INTEGER,
+    quality VARCHAR(50),
+    lang VARCHAR(50),
+    duration VARCHAR(50),
+    episode_total INTEGER,
+    tmdb_id VARCHAR(50) UNIQUE,
+    source VARCHAR(50),
+    view INTEGER DEFAULT 0,
+    last_viewed_at TIMESTAMP,
+    created_by INTEGER REFERENCES users(id),
+    contract_id INTEGER REFERENCES contracts(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+`);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS countries (
@@ -253,7 +257,9 @@ const initTables = async () => {
         name VARCHAR(100),
         price NUMERIC,
         duration_days INTEGER,
-        status VARCHAR(20) DEFAULT 'active'
+        description TEXT,
+        status VARCHAR(20) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 

@@ -1,16 +1,19 @@
 import pool from "../config/db.js";
 
-const PUBLIC_STATUSES = ["published", "completed"];
+const PUBLIC_STATUSES = ["published"];
 const MOVIE_TYPES = ["series", "movie"];
 
+const LIFECYCLE_STATUS = ["upcoming", "ongoing", "completed"];
 export const getPublicMovies = async (query) => {
   const page = Math.max(parseInt(query.page) || 1, 1);
   const limit = Math.min(parseInt(query.limit) || 10, 50);
   const offset = (page - 1) * limit;
 
-  const { keyword, status, type, year, category, country } = query;
+  const { keyword, status, type, year, category, country, lifecycle_status } =
+    query;
 
   let where = ["m.is_available = true", "m.status = ANY($1::text[])"];
+
   let values = [PUBLIC_STATUSES];
   let i = 2;
   if (keyword) {
@@ -25,11 +28,15 @@ export const getPublicMovies = async (query) => {
     where.push(`m.status = $${i++}`);
     values.push(status);
   }
+  if (lifecycle_status && LIFECYCLE_STATUS.includes(lifecycle_status)) {
+    where.push(`m.lifecycle_status = $${i++}`);
+    values.push(lifecycle_status);
+  }
   if (type && MOVIE_TYPES.includes(type)) {
     where.push(`m.type = $${i++}`);
     values.push(type);
   }
-  if (year && !isNaN(year)) {
+  if (year && !isNaN(Number(year))) {
     where.push(`m.year = $${i++}`);
     values.push(Number(year));
   }
@@ -64,16 +71,17 @@ export const getPublicMovies = async (query) => {
     FROM movies m
     ${whereSQL}
   `;
+
   const dataQuery = `
     SELECT m.*
     ${baseQuery}
     ORDER BY m.created_at DESC NULLS LAST
     LIMIT $${i++} OFFSET $${i}
   `;
+
   const countQuery = `
-    SELECT COUNT(*)
-    FROM movies m
-    ${whereSQL}
+    SELECT COUNT(DISTINCT m.id)
+    ${baseQuery}
   `;
 
   const dataRes = await pool.query(dataQuery, [...values, limit, offset]);
@@ -93,7 +101,7 @@ export const getPublicMovieById = async (id, user = null) => {
   const movieRes = await pool.query(
     `
     SELECT * FROM movies 
-    WHERE id=$1 
+    WHERE id = $1 
       AND is_available = true
       AND status = ANY($2::text[])
     `,
@@ -110,7 +118,6 @@ export const getPublicMovieById = async (id, user = null) => {
       message: "Phim này yêu cầu tài khoản premium",
     };
   }
-
   const categories = await pool.query(
     `
     SELECT c.*
@@ -120,7 +127,6 @@ export const getPublicMovieById = async (id, user = null) => {
     `,
     [id],
   );
-
   const countries = await pool.query(
     `
     SELECT c.*
@@ -130,7 +136,6 @@ export const getPublicMovieById = async (id, user = null) => {
     `,
     [id],
   );
-
   const people = await pool.query(
     `
     SELECT p.*, mp.role
@@ -140,7 +145,6 @@ export const getPublicMovieById = async (id, user = null) => {
     `,
     [id],
   );
-
   const episodes = await pool.query(
     `
     SELECT e.*,
@@ -166,13 +170,17 @@ export const getPublicMovieById = async (id, user = null) => {
     `,
     [id],
   );
-
+  const lifecycle = movie.lifecycle_status;
+  let finalEpisodes = episodes.rows;
+  if (lifecycle === "upcoming") {
+    finalEpisodes = [];
+  }
   return {
     ...movie,
     categories: categories.rows,
     countries: countries.rows,
     people: people.rows,
-    episodes: episodes.rows,
+    episodes: finalEpisodes,
   };
 };
 export const getCategories = async () => {
