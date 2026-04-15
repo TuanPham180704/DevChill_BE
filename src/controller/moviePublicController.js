@@ -32,3 +32,30 @@ export const getPublicMovieById = async (req, res) => {
     });
   }
 };
+
+export const getCategories = async (req, res) => {
+  try {
+    const data = await movieService.getCategories();
+    res.json({ data });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+export const getCountries = async (req, res) => {
+  try {
+    const data = await movieService.getCountries();
+    res.json({ data });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+export const getYears = async (req, res) => {
+  try {
+    const data = await movieService.getYears();
+    res.json({ data });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};

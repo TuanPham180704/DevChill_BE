@@ -37,10 +37,11 @@ export const createMovie = async (data) => {
   const res = await pool.query(
     `INSERT INTO movies(
       name, origin_name, slug, content, type, year,
-      duration, episode_total, created_by, contract_id
+      duration, episode_total, created_by, contract_id,
+      status, is_available, is_premium
     )
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-     RETURNING *`,
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    RETURNING *`,
     [
       data.name,
       data.origin_name || null,
@@ -52,6 +53,9 @@ export const createMovie = async (data) => {
       data.episode_total || null,
       data.created_by || null,
       data.contract_id,
+      "draft",
+      false,
+      false,
     ],
   );
 
