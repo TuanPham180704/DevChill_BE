@@ -1,4 +1,4 @@
-import pool from "../config/db.js";
+import pool from "../../config/db.js";
 
 const toSlug = (str = "") =>
   str
@@ -487,15 +487,4 @@ export const updateSetting = async (movieId, data) => {
   );
 
   return res.rows[0];
-};
-export const recommend = async (movieId) => {
-  const res = await pool.query(
-    `SELECT * FROM movies
-     WHERE id != $1
-     ORDER BY RANDOM()
-     LIMIT 10`,
-    [movieId],
-  );
-
-  return res.rows;
 };

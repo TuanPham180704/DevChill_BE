@@ -1,8 +1,8 @@
-import * as movieService from "../services/movieService.js";
+import * as movieService from "../services/moviePublicServices.js";
 
-export const getAll = async (req, res) => {
+export const getPublicMovies = async (req, res) => {
   try {
-    const result = await movieService.getAll(req.query);
+    const result = await movieService.getPublicMovies(req.query);
 
     res.json({
       success: true,
@@ -17,28 +17,13 @@ export const getAll = async (req, res) => {
   }
 };
 
-export const getById = async (req, res) => {
+export const getPublicMovieById = async (req, res) => {
   try {
-    const movie = await movieService.getById(req.params.id);
+    const movie = await movieService.getPublicMovieById(req.params.id);
 
     res.json({
       success: true,
       data: movie,
-    });
-  } catch (err) {
-    res.status(err.status || 400).json({
-      success: false,
-      message: err.message,
-    });
-  }
-};
-export const recommend = async (req, res) => {
-  try {
-    const movies = await movieService.recommend(req.params.id);
-
-    res.json({
-      success: true,
-      data: movies,
     });
   } catch (err) {
     res.status(err.status || 400).json({

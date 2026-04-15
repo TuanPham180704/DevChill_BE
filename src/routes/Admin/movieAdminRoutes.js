@@ -1,9 +1,9 @@
 import express from "express";
-import * as controller from "../../../controller/Admin/Movies/movieController.js";
+import * as controller from "../../controller/Admin/movieController.js";
 import {
   authenticate,
   authorization,
-} from "../../../middlewares/authMiddleware.js";
+} from "../../middlewares/authMiddleware.js";
 
 const router = express.Router();
 router.use(authenticate, authorization(["admin"]));
