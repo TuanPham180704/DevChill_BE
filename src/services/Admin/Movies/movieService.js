@@ -112,39 +112,62 @@ export const getAll = async (query) => {
   const limit = Math.min(parseInt(query.limit) || 10, 50);
   const offset = (page - 1) * limit;
 
-  const { keyword, status, type } = query;
+  const { keyword, status, type, year, category, country } = query;
 
   let where = [];
   let values = [];
   let i = 1;
-
   if (keyword) {
-    where.push(`(name ILIKE $${i} OR origin_name ILIKE $${i})`);
+    where.push(`(m.name ILIKE $${i} OR m.origin_name ILIKE $${i})`);
     values.push(`%${keyword}%`);
     i++;
   }
-
   if (status) {
-    where.push(`status = $${i++}`);
+    where.push(`m.status = $${i++}`);
     values.push(status);
   }
-
   if (type) {
-    where.push(`type = $${i++}`);
+    where.push(`m.type = $${i++}`);
     values.push(type);
   }
-
+  if (year) {
+    where.push(`m.year = $${i++}`);
+    values.push(year);
+  }
+  if (category) {
+    where.push(`cat.slug = $${i++}`);
+    values.push(category);
+  }
+  if (country) {
+    where.push(`c.slug = $${i++}`);
+    values.push(country);
+  }
   const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
   const dataQuery = `
-    SELECT * FROM movies
+    SELECT DISTINCT m.*
+    FROM movies m
+
+    LEFT JOIN movie_categories mc ON mc.movie_id = m.id
+    LEFT JOIN categories cat ON cat.id = mc.category_id
+
+    LEFT JOIN movie_countries mco ON mco.movie_id = m.id
+    LEFT JOIN countries c ON c.id = mco.country_id
+
     ${whereSQL}
-    ORDER BY created_at DESC
+    ORDER BY m.created_at DESC
     LIMIT $${i++} OFFSET $${i}
   `;
 
   const countQuery = `
-    SELECT COUNT(*) FROM movies
+    SELECT COUNT(DISTINCT m.id)
+    FROM movies m
+
+    LEFT JOIN movie_categories mc ON mc.movie_id = m.id
+    LEFT JOIN categories cat ON cat.id = mc.category_id
+
+    LEFT JOIN movie_countries mco ON mco.movie_id = m.id
+    LEFT JOIN countries c ON c.id = mco.country_id
+
     ${whereSQL}
   `;
 
