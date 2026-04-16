@@ -17,9 +17,9 @@ export const getPublicMovies = async (req, res) => {
   }
 };
 
-export const getPublicMovieBySlug = async (req, res) => {
+export const getPublicMovieById = async (req, res) => {
   try {
-    const movie = await movieService.getPublicMovieBySlug(req.params.id);
+    const movie = await movieService.getPublicMovieById(req.params.id);
 
     res.json({
       success: true,
