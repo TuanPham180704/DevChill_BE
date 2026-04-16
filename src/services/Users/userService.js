@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 const SALT = 10;
 export const getProfile = async (userId) => {
   const res = await pool.query(
-    `SELECT id, username, email, gender, avatar_url, 
+    `SELECT id, username, email, gender, avatar_url, is_premium,
             TO_CHAR(birth_date, 'YYYY-MM-DD') AS birth_date
      FROM users
      WHERE id=$1 AND deleted_at IS NULL`,

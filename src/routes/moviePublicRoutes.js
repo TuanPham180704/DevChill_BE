@@ -7,6 +7,7 @@ router.get("/", controller.getPublicMovies);
 router.get("/category", controller.getCategories);
 router.get("/country", controller.getCountries);
 router.get("/year", controller.getYears);
-router.get("/:id", controller.getPublicMovieById);
+router.get("/:slug/watch", controller.watchMovie);
+router.get("/:id", controller.getPublicMovieBySlug);
 
 export default router;

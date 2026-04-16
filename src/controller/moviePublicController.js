@@ -17,9 +17,9 @@ export const getPublicMovies = async (req, res) => {
   }
 };
 
-export const getPublicMovieById = async (req, res) => {
+export const getPublicMovieBySlug = async (req, res) => {
   try {
-    const movie = await movieService.getPublicMovieById(req.params.id);
+    const movie = await movieService.getPublicMovieBySlug(req.params.id);
 
     res.json({
       success: true,
@@ -57,5 +57,33 @@ export const getYears = async (req, res) => {
     res.json({ data });
   } catch (err) {
     res.status(400).json({ message: err.message });
+  }
+};
+export const watchMovie = async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const data = await movieService.getMovieWatch(slug, req.query, req.user);
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy dữ liệu",
+      });
+    }
+    if (data.locked) {
+      return res.status(403).json({
+        success: false,
+        ...data,
+      });
+    }
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
   }
 };
