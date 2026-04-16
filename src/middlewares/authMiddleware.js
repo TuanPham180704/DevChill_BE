@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-import pool from "../config/db.js"; 
+import pool from "../config/db.js";
 
 dotenv.config();
 
@@ -14,16 +14,19 @@ export async function authenticate(req, res, next) {
   try {
     const secret = process.env.JWT_SECRET;
     const decoded = jwt.verify(token, secret);
-    req.user = decoded;
+
     const userRes = await pool.query(
-      `SELECT is_locked, lock_until, block_reason FROM users WHERE id=$1`,
+      `SELECT id, role, is_premium, is_locked, lock_until, block_reason
+       FROM users WHERE id=$1`,
       [decoded.id],
     );
+
     const user = userRes.rows[0];
 
     if (!user) {
       return res.status(404).json({ message: "Người dùng không tồn tại" });
     }
+
     if (user.is_locked) {
       let msg = "Tài khoản đã bị khóa";
       if (user.lock_until) {
@@ -34,7 +37,10 @@ export async function authenticate(req, res, next) {
       }
       return res.status(403).json({ message: msg });
     }
-
+    req.user = {
+      ...user,
+      is_premium: user.is_premium === true,
+    };
     next();
   } catch (error) {
     console.error(error);
