@@ -4,9 +4,6 @@ const PUBLIC_STATUSES = ["published"];
 const MOVIE_TYPES = ["series", "movie"];
 const LIFECYCLE_STATUS = ["upcoming", "ongoing", "completed"];
 
-/* =========================
-   SAFE PARAM HELPER
-========================= */
 const buildParams = () => {
   const values = [];
 
@@ -19,9 +16,6 @@ const buildParams = () => {
   };
 };
 
-/* =========================
-   GET PUBLIC MOVIES
-========================= */
 export const getPublicMovies = async (query) => {
   const page = Math.max(parseInt(query.page) || 1, 1);
   const limit = Math.min(parseInt(query.limit) || 10, 50);
@@ -34,7 +28,6 @@ export const getPublicMovies = async (query) => {
 
   const where = ["m.is_available = true"];
 
-  /* keyword */
   if (keyword?.trim()) {
     const k = add(`%${keyword.trim()}%`);
     where.push(`(
@@ -43,28 +36,23 @@ export const getPublicMovies = async (query) => {
     )`);
   }
 
-  /* status */
   if (status && PUBLIC_STATUSES.includes(status)) {
     where.push(`m.status = ${add(status)}`);
   }
 
-  /* lifecycle */
   if (lifecycle_status && LIFECYCLE_STATUS.includes(lifecycle_status)) {
     where.push(`m.lifecycle_status = ${add(lifecycle_status)}`);
   }
 
-  /* type */
   const normalizedType = (type || "").toLowerCase().trim();
   if (MOVIE_TYPES.includes(normalizedType)) {
     where.push(`m.type = ${add(normalizedType)}`);
   }
 
-  /* year */
   if (year && !isNaN(Number(year))) {
     where.push(`m.year = ${add(Number(year))}`);
   }
 
-  /* category */
   if (category?.trim()) {
     where.push(`
       EXISTS (
@@ -76,8 +64,6 @@ export const getPublicMovies = async (query) => {
       )
     `);
   }
-
-  /* country */
   if (country?.trim()) {
     where.push(`
       EXISTS (
@@ -125,10 +111,6 @@ export const getPublicMovies = async (query) => {
     },
   };
 };
-
-/* =========================
-   GET MOVIE DETAIL
-========================= */
 export const getPublicMovieById = async (id) => {
   const isNumeric = /^\d+$/.test(id);
 
@@ -212,17 +194,9 @@ export const getPublicMovieById = async (id) => {
     },
   };
 };
-
-/* =========================
-   WATCH MOVIE
-========================= */
 export const getMovieWatch = async (slug, query, user = null) => {
   const ep = Number(query.ep) || 1;
   const server = query.server;
-
-  /* =========================
-     GET MOVIE
-  ========================= */
   const movieRes = await pool.query(
     `
     SELECT *
@@ -237,10 +211,6 @@ export const getMovieWatch = async (slug, query, user = null) => {
   if (!movieRes.rows.length) return null;
 
   const movie = movieRes.rows[0];
-
-  /* =========================
-     PREMIUM CHECK
-  ========================= */
   if (movie.is_premium && !user?.is_premium) {
     return {
       success: true,
@@ -248,10 +218,6 @@ export const getMovieWatch = async (slug, query, user = null) => {
       message: "Phim này yêu cầu tài khoản premium để xem",
     };
   }
-
-  /* =========================
-     UPCOMING CHECK
-  ========================= */
   if (movie.lifecycle_status === "upcoming") {
     return {
       success: true,
@@ -259,10 +225,6 @@ export const getMovieWatch = async (slug, query, user = null) => {
       message: "Phim chưa phát hành",
     };
   }
-
-  /* =========================
-     GET ALL EPISODES (IMPORTANT FIX)
-  ========================= */
   const episodesRes = await pool.query(
     `
     SELECT id, movie_id, episode_number, name, slug
@@ -282,16 +244,8 @@ export const getMovieWatch = async (slug, query, user = null) => {
       message: "Phim chưa có tập nào",
     };
   }
-
-  /* =========================
-     GET CURRENT EPISODE
-  ========================= */
   const episode =
     episodes.find((e) => Number(e.episode_number) === ep) || episodes[0];
-
-  /* =========================
-     GET STREAMS
-  ========================= */
   const streamRes = await pool.query(
     `
     SELECT es.*, s.name as server_name
@@ -306,10 +260,6 @@ export const getMovieWatch = async (slug, query, user = null) => {
 
   const selectedStream =
     streams.find((s) => String(s.id) === String(server)) || streams[0] || null;
-
-  /* =========================
-     RESPONSE
-  ========================= */
   return {
     success: true,
     data: {
@@ -319,10 +269,8 @@ export const getMovieWatch = async (slug, query, user = null) => {
         slug: movie.slug,
         is_premium: movie.is_premium,
       },
-
-      episodes, // ✅ FIX: thêm list tập
-
-      episode, // current episode
+      episodes, 
+      episode, 
 
       streams,
 
@@ -330,10 +278,6 @@ export const getMovieWatch = async (slug, query, user = null) => {
     },
   };
 };
-
-/* =========================
-   CATEGORIES
-========================= */
 export const getCategories = async () => {
   const res = await pool.query(`
     SELECT id, name, slug
@@ -344,9 +288,6 @@ export const getCategories = async () => {
   return { success: true, data: res.rows };
 };
 
-/* =========================
-   COUNTRIES
-========================= */
 export const getCountries = async () => {
   const res = await pool.query(`
     SELECT id, name, slug
@@ -357,9 +298,6 @@ export const getCountries = async () => {
   return { success: true, data: res.rows };
 };
 
-/* =========================
-   YEARS
-========================= */
 export const getYears = async () => {
   const res = await pool.query(`
     SELECT DISTINCT year
@@ -367,7 +305,6 @@ export const getYears = async () => {
     WHERE year IS NOT NULL
     ORDER BY year DESC
   `);
-
   return {
     success: true,
     data: res.rows.map((r) => ({
