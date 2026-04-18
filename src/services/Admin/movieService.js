@@ -400,6 +400,7 @@ export const updateMeta = async (
     client.release();
   }
 };
+
 export const updateMedia = async (movieId, data) => {
   const client = await pool.connect();
 
@@ -407,14 +408,13 @@ export const updateMedia = async (movieId, data) => {
     await client.query("BEGIN");
 
     const { poster_url, thumb_url, trailer_url, episodes } = data;
-
     if (poster_url || thumb_url || trailer_url) {
       await client.query(
         `UPDATE movies SET
-          poster_url = COALESCE($1, poster_url),
-          thumb_url = COALESCE($2, thumb_url),
-          trailer_url = COALESCE($3, trailer_url)
-         WHERE id=$4`,
+      poster_url = COALESCE($1, poster_url),
+      thumb_url = COALESCE($2, thumb_url),
+      trailer_url = COALESCE($3, trailer_url)
+     WHERE id=$4`,
         [poster_url, thumb_url, trailer_url, movieId],
       );
     }
@@ -520,9 +520,8 @@ export const updateSetting = async (movieId, data) => {
       production_status = COALESCE($3, production_status),
       is_available = COALESCE($4, is_available),
       is_premium = COALESCE($5, is_premium),
-      source = COALESCE($6, source),
-      tmdb_id = COALESCE($7, tmdb_id)
-     WHERE id=$8
+      source = COALESCE($6, source)
+     WHERE id=$7
      RETURNING *`,
     [
       data.status,
@@ -531,7 +530,6 @@ export const updateSetting = async (movieId, data) => {
       data.is_available,
       data.is_premium,
       data.source,
-      data.tmdb_id,
       movieId,
     ],
   );

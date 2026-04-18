@@ -107,7 +107,6 @@ const initTables = async () => {
     lang VARCHAR(50),
     duration VARCHAR(50),
     episode_total INTEGER,
-    tmdb_id VARCHAR(50) UNIQUE,
     source VARCHAR(50),
     view INTEGER DEFAULT 0,
     last_viewed_at TIMESTAMP,
@@ -286,10 +285,6 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_movies_tmdb ON movies(tmdb_id);`,
-    );
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_messages_movie ON messages(movie_id);`,
     );

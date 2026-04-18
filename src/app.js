@@ -1,5 +1,8 @@
 import express from "express";
 import morgan from "morgan";
+import path from "path";
+import { fileURLToPath } from "url";
+
 import cors from "cors";
 import dotenv from "dotenv";
 import bodyParser from "body-parser";
@@ -25,6 +28,9 @@ app.use(express.json());
 app.use(bodyParser.json({ limit: "10mb" }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
+
+
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use("/api/auth", authRoutes);
 
 app.use("/api/admin/users", adminUserRoutes);
