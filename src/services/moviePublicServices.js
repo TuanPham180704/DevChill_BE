@@ -269,8 +269,8 @@ export const getMovieWatch = async (slug, query, user = null) => {
         slug: movie.slug,
         is_premium: movie.is_premium,
       },
-      episodes, 
-      episode, 
+      episodes,
+      episode,
 
       streams,
 
