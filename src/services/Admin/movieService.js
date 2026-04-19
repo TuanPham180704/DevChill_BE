@@ -46,44 +46,227 @@ const validateMovieData = (data, isCreate = false) => {
 export const createMovie = async (data) => {
   validateMovieData(data, true);
 
-  const slug = toSlug(data.name);
+  const client = await pool.connect();
 
-  const res = await pool.query(
-    `INSERT INTO movies(
-      name, origin_name, slug, content, type, year,
-      duration, episode_total, created_by, contract_id,
+  try {
+    await client.query("BEGIN");
 
-      status,
-      lifecycle_status,
-      production_status,
+    const slug = toSlug(data.name);
 
-      is_available,
-      is_premium
-    )
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-    RETURNING *`,
-    [
-      data.name,
-      data.origin_name || null,
-      slug,
-      data.content || null,
-      data.type || null,
-      data.year || null,
-      data.duration || null,
-      data.episode_total || null,
-      data.created_by || null,
-      data.contract_id,
+    // 1. CREATE MOVIE
+    const movieRes = await client.query(
+      `INSERT INTO movies(
+        name, origin_name, slug, content, type, year,
+        duration, episode_total, created_by, contract_id,
+        status, lifecycle_status, production_status,
+        is_available, is_premium,
+        poster_url, thumb_url, trailer_url
+      )
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      RETURNING *`,
+      [
+        data.name,
+        data.origin_name || null,
+        slug,
+        data.content || null,
+        data.type || null,
+        data.year || null,
+        data.duration || null,
+        data.episode_total || null,
+        data.created_by || null,
+        data.contract_id,
 
-      data.status || "draft",
-      data.lifecycle_status || "upcoming",
-      data.production_status || null,
+        data.status || "draft",
+        data.lifecycle_status || "upcoming",
+        data.production_status || null,
 
-      data.is_available ?? true,
-      data.is_premium ?? false,
-    ],
-  );
+        data.is_available ?? true,
+        data.is_premium ?? false,
 
-  return res.rows[0];
+        data.poster_url || null,
+        data.thumb_url || null,
+        data.trailer_url || null,
+      ],
+    );
+
+    const movieId = movieRes.rows[0].id;
+
+    // =========================
+    // 2. META (categories, countries, people)
+    // =========================
+
+    const getOrCreate = async (table, items = []) => {
+      const ids = [];
+
+      for (const item of items) {
+        if (!item?.name) continue;
+
+        const slug = toSlug(item.name);
+
+        let res = await client.query(`SELECT id FROM ${table} WHERE slug=$1`, [
+          slug,
+        ]);
+
+        let id;
+
+        if (res.rows.length) {
+          id = res.rows[0].id;
+        } else {
+          const insert = await client.query(
+            `INSERT INTO ${table}(name, slug) VALUES($1,$2) RETURNING id`,
+            [item.name, slug],
+          );
+          id = insert.rows[0].id;
+        }
+
+        ids.push(id);
+      }
+
+      return ids;
+    };
+
+    // categories
+    if (data.categories) {
+      const ids = await getOrCreate("categories", data.categories);
+
+      for (const id of ids) {
+        await client.query(
+          `INSERT INTO movie_categories(movie_id, category_id)
+           VALUES($1,$2)`,
+          [movieId, id],
+        );
+      }
+    }
+
+    // countries
+    if (data.countries) {
+      const ids = await getOrCreate("countries", data.countries);
+
+      for (const id of ids) {
+        await client.query(
+          `INSERT INTO movie_countries(movie_id, country_id)
+           VALUES($1,$2)`,
+          [movieId, id],
+        );
+      }
+    }
+
+    // people
+    if (data.people) {
+      for (const p of data.people) {
+        if (!p?.name) continue;
+
+        const slug = toSlug(p.name);
+
+        let res = await client.query(`SELECT id FROM people WHERE slug=$1`, [
+          slug,
+        ]);
+
+        let personId;
+
+        if (!res.rows.length) {
+          const insert = await client.query(
+            `INSERT INTO people(name, slug) VALUES($1,$2) RETURNING id`,
+            [p.name, slug],
+          );
+          personId = insert.rows[0].id;
+        } else {
+          personId = res.rows[0].id;
+        }
+
+        await client.query(
+          `INSERT INTO movie_people(movie_id, person_id, role)
+           VALUES($1,$2,$3)`,
+          [movieId, personId, p.role || null],
+        );
+      }
+    }
+
+    // =========================
+    // 3. EPISODES + STREAMS
+    // =========================
+
+    const getOrCreateServer = async (name, type = "embed") => {
+      if (!name) return null;
+
+      const find = await client.query(
+        `SELECT id FROM servers WHERE name=$1 AND type=$2`,
+        [name, type],
+      );
+
+      if (find.rows.length) return find.rows[0].id;
+
+      const insert = await client.query(
+        `INSERT INTO servers(name, type)
+         VALUES($1,$2)
+         RETURNING id`,
+        [name, type],
+      );
+
+      return insert.rows[0].id;
+    };
+
+    if (data.episodes && Array.isArray(data.episodes)) {
+      for (const ep of data.episodes) {
+        if (!ep?.episode_number) continue;
+
+        const epSlug = toSlug(ep.name || `tap-${ep.episode_number}`);
+
+        const epRes = await client.query(
+          `INSERT INTO episodes(movie_id, season, episode_number, name, slug)
+           VALUES($1,$2,$3,$4,$5)
+           RETURNING id`,
+          [movieId, ep.season || 1, ep.episode_number, ep.name || "", epSlug],
+        );
+
+        const epId = epRes.rows[0].id;
+
+        for (const st of ep.streams || []) {
+          if (!st?.quality) continue;
+
+          let serverId = st.server_id;
+
+          if (!serverId && st.server_name) {
+            serverId = await getOrCreateServer(
+              st.server_name,
+              st.type || "embed",
+            );
+          }
+
+          if (!serverId) continue;
+
+          await client.query(
+            `INSERT INTO episode_streams(
+              episode_id,
+              server_id,
+              quality,
+              lang,
+              link_embed,
+              link_m3u8
+            )
+            VALUES($1,$2,$3,$4,$5,$6)`,
+            [
+              epId,
+              serverId,
+              st.quality,
+              st.lang || "vietsub",
+              st.link_embed || null,
+              st.link_m3u8 || null,
+            ],
+          );
+        }
+      }
+    }
+
+    await client.query("COMMIT");
+
+    return movieRes.rows[0];
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
 };
 
 export const updateInfo = async (id, data) => {
