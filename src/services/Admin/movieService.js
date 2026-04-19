@@ -322,7 +322,6 @@ export const getAll = async (query) => {
   const page = Math.max(parseInt(query.page) || 1, 1);
   const limit = Math.min(parseInt(query.limit) || 10, 50);
   const offset = (page - 1) * limit;
-
   const { keyword, status, type, year, category, country, lifecycle_status } =
     query;
 
@@ -367,7 +366,14 @@ export const getAll = async (query) => {
   }
 
   const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
+  const statsQuery = `
+  SELECT
+    COUNT(*) FILTER (WHERE status = 'draft') AS draft,
+    COUNT(*) FILTER (WHERE status = 'published') AS published,
+    COUNT(*) FILTER (WHERE status = 'hidden') AS hidden,
+    COUNT(*) AS total
+  FROM movies m
+`;
   const dataQuery = `
     SELECT DISTINCT m.*
     FROM movies m
@@ -392,13 +398,20 @@ export const getAll = async (query) => {
 
   const dataRes = await pool.query(dataQuery, [...values, limit, offset]);
   const countRes = await pool.query(countQuery, values);
-
+  const statsRes = await pool.query(statsQuery);
+  const statsRow = statsRes.rows[0];
   return {
     data: dataRes.rows,
     pagination: {
       total: parseInt(countRes.rows[0].count),
       page,
       limit,
+    },
+    stats: {
+      draft: Number(statsRow.draft),
+      published: Number(statsRow.published),
+      hidden: Number(statsRow.hidden),
+      total: Number(statsRow.total),
     },
   };
 };

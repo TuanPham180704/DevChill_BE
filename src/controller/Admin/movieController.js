@@ -117,6 +117,7 @@ export const getAll = async (req, res) => {
       success: true,
       data: result.data,
       pagination: result.pagination,
+      stats: result.stats,
     });
   } catch (err) {
     res.status(err.status || 400).json({
@@ -148,4 +149,3 @@ export const getById = async (req, res) => {
     });
   }
 };
-

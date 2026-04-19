@@ -71,6 +71,15 @@ export async function getContracts({
     `SELECT COUNT(*) AS total FROM contracts ${where}`,
     values,
   );
+  const statsRes = await pool.query(`
+  SELECT
+    COUNT(*) FILTER (WHERE status = 'draft') AS draft,
+    COUNT(*) FILTER (WHERE status = 'active') AS active,
+    COUNT(*) FILTER (WHERE status = 'expired') AS expired,
+    COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
+    COUNT(*) AS total
+  FROM contracts
+`);
 
   return {
     data: dataRes.rows,
@@ -78,6 +87,13 @@ export async function getContracts({
     page,
     limit,
     totalPages: Math.ceil(countRes.rows[0].total / limit),
+    stats: {
+      draft: Number(statsRes.rows[0].draft),
+      active: Number(statsRes.rows[0].active),
+      expired: Number(statsRes.rows[0].expired),
+      cancelled: Number(statsRes.rows[0].cancelled),
+      total: Number(statsRes.rows[0].total),
+    },
   };
 }
 
@@ -149,7 +165,7 @@ export async function updateContract(
   if (file_url) {
     if (contract.file_url) {
       const oldPath = contract.file_url.replace(/^\//, "");
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); 
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
     fields.push(`file_url=$${idx++}`);
     values.push(file_url);
