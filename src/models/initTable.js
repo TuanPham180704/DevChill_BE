@@ -79,43 +79,49 @@ const initTables = async () => {
     `);
 
     await pool.query(`
-    CREATE TABLE IF NOT EXISTS movies (
-    id SERIAL PRIMARY KEY,
+      CREATE TABLE IF NOT EXISTS movies (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        origin_name TEXT,
+        slug TEXT UNIQUE NOT NULL,
+        content TEXT,
 
-    name TEXT NOT NULL,
-    origin_name TEXT,
-    slug TEXT UNIQUE NOT NULL,
-    content TEXT,
+        poster_url TEXT,
+        thumb_url TEXT,
+        trailer_url TEXT,
 
-    poster_url TEXT,
-    thumb_url TEXT,
-    trailer_url TEXT,
+        type VARCHAR(20),
+        status VARCHAR(20) DEFAULT 'draft'
+          CHECK (status IN ('draft', 'published', 'hidden')),
+        lifecycle_status VARCHAR(20) DEFAULT 'upcoming'
+          CHECK (lifecycle_status IN ('upcoming', 'ongoing', 'completed')),
 
-    type VARCHAR(20),
-    status VARCHAR(20) DEFAULT 'draft'
-      CHECK (status IN ('draft', 'published', 'hidden')),
-    lifecycle_status VARCHAR(20) DEFAULT 'upcoming'
-      CHECK (lifecycle_status IN ('upcoming', 'ongoing', 'completed')),
-    release_date TIMESTAMP,
-    end_date TIMESTAMP,
-   production_status VARCHAR(20)
-   CHECK (production_status IN ('planning', 'filming', 'post-production')),
-    is_available BOOLEAN DEFAULT TRUE,
-    is_premium BOOLEAN DEFAULT FALSE,
-    year INTEGER,
-    quality VARCHAR(50),
-    lang VARCHAR(50),
-    duration VARCHAR(50),
-    episode_total INTEGER,
-    source VARCHAR(50),
-    view INTEGER DEFAULT 0,
-    last_viewed_at TIMESTAMP,
-    created_by INTEGER REFERENCES users(id),
-    contract_id INTEGER REFERENCES contracts(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-`);
+        release_date TIMESTAMP,
+        end_date TIMESTAMP,
+
+        production_status VARCHAR(20)
+          CHECK (production_status IN ('planning', 'filming', 'post-production')),
+
+        is_available BOOLEAN DEFAULT TRUE,
+        is_premium BOOLEAN DEFAULT FALSE,
+
+        year INTEGER,
+        quality VARCHAR(50),
+        lang VARCHAR(50),
+        duration VARCHAR(50),
+        episode_total INTEGER,
+        source VARCHAR(50),
+
+        view INTEGER DEFAULT 0,
+        last_viewed_at TIMESTAMP,
+
+        created_by INTEGER REFERENCES users(id),
+        contract_id INTEGER REFERENCES contracts(id),
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS countries (
@@ -188,19 +194,17 @@ const initTables = async () => {
         UNIQUE(movie_id, season, episode_number)
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS episode_streams (
         id SERIAL PRIMARY KEY,
         episode_id INTEGER REFERENCES episodes(id) ON DELETE CASCADE,
         server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
-
         quality VARCHAR(50),
-
         lang VARCHAR(20) DEFAULT 'vietsub'
           CHECK (lang IN ('vietsub', 'dub', 'raw')),
         link_embed TEXT,
         link_m3u8 TEXT,
-
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (episode_id, server_id, quality, lang)
       );
@@ -250,26 +254,35 @@ const initTables = async () => {
       );
     `);
 
+    // ================== PLANS ==================
     await pool.query(`
       CREATE TABLE IF NOT EXISTS plans (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100),
         price NUMERIC,
         duration_days INTEGER,
-        description TEXT,
-        status VARCHAR(20) DEFAULT 'active',
+        description JSONB,
+        is_popular BOOLEAN DEFAULT FALSE,
+        status VARCHAR(20) DEFAULT 'active'
+          CHECK (status IN ('active', 'inactive')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
+    // ================== SUBSCRIPTIONS ==================
     await pool.query(`
       CREATE TABLE IF NOT EXISTS subscriptions (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         plan_id INTEGER REFERENCES plans(id),
+
         start_date TIMESTAMP,
         end_date TIMESTAMP,
-        status VARCHAR(20)
+
+        status VARCHAR(20) DEFAULT 'pending'
+          CHECK (status IN ('pending', 'active', 'expired', 'cancelled')),
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
@@ -277,14 +290,50 @@ const initTables = async () => {
       CREATE TABLE IF NOT EXISTS payments (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id),
+        plan_id INTEGER REFERENCES plans(id),
         subscription_id INTEGER REFERENCES subscriptions(id),
+
         amount NUMERIC,
-        payment_method VARCHAR(50),
-        status VARCHAR(20),
+        payment_method VARCHAR(50) DEFAULT 'vnpay',
+
+        status VARCHAR(20) DEFAULT 'pending'
+          CHECK (status IN ('pending', 'success', 'failed')),
+
         transaction_code VARCHAR(100),
+
+        vnp_txn_ref VARCHAR(100) UNIQUE,
+        vnp_transaction_no VARCHAR(100),
+        vnp_response_code VARCHAR(10),
+        vnp_bank_code VARCHAR(20),
+
+        paid_at TIMESTAMP,
+        raw_response JSONB,
+
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // ================== VNPAY TRANSACTIONS ==================
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS vnpay_transactions (
+        id SERIAL PRIMARY KEY,
+        payment_id INTEGER REFERENCES payments(id) ON DELETE CASCADE,
+
+        vnp_txn_ref VARCHAR(100) UNIQUE,
+        vnp_transaction_no VARCHAR(100),
+        vnp_amount NUMERIC,
+        vnp_bank_code VARCHAR(20),
+        vnp_response_code VARCHAR(10),
+        vnp_order_info TEXT,
+
+        status VARCHAR(20),
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // ================== INDEX ==================
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_messages_movie ON messages(movie_id);`,
     );
@@ -307,7 +356,17 @@ const initTables = async () => {
       `CREATE INDEX IF NOT EXISTS idx_movie_country ON movie_countries(country_id);`,
     );
 
-    console.log(" FINAL DB READY (PRODUCTION) ✅");
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_payment_txn_ref ON payments(vnp_txn_ref);`,
+    );
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_payment_user ON payments(user_id);`,
+    );
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_sub_user ON subscriptions(user_id);`,
+    );
+
+    console.log(" FINAL DB READY (PRODUCTION + VNPAY) 🚀");
   } catch (err) {
     console.error(" Error:", err);
   }

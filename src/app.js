@@ -12,7 +12,8 @@ import authRoutes from "./routes/authRoutes.js";
 import adminUserRoutes from "./routes/Admin/userAdRoutes.js";
 import adminContractRoutes from "./routes/Admin/contractRoutes.js";
 import adminMovieRoutes from "./routes/Admin/movieAdminRoutes.js";
-
+import adminPlanRoutes from "./routes/Admin/adminPlanRoutes.js";
+import planRoutes from "./routes/Users/userPlanRoutes.js";
 import profileRoutes from "./routes/Users/userRoutes.js";
 
 import publicMoviesRoutes from "./routes/moviePublicRoutes.js";
@@ -28,16 +29,15 @@ app.use(express.json());
 app.use(bodyParser.json({ limit: "10mb" }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
-
-
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use("/api/auth", authRoutes);
 
 app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/contracts", adminContractRoutes);
 app.use("/api/admin/movies", adminMovieRoutes);
-
+app.use("/api/admin/plans", adminPlanRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/plans", planRoutes);
 
 app.use("/api/movies", publicMoviesRoutes);
 
