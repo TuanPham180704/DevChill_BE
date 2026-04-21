@@ -284,6 +284,7 @@ export const updateInfo = async (id, data) => {
     "year",
     "duration",
     "episode_total",
+    "contract_id",
   ];
 
   if (data.name !== undefined) {

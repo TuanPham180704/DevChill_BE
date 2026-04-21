@@ -57,3 +57,40 @@ export const getPaymentHistoryService = async (userId) => {
 
   return result.rows;
 };
+
+export const processSuccessfulPaymentService = async (
+  userId,
+  planId,
+  planDurationDays,
+) => {
+  const activeSub = await pool.query(
+    "SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1",
+    [userId],
+  );
+
+  let newEndDate;
+  let subscriptionId;
+
+  if (activeSub.rows.length > 0) {
+    subscriptionId = activeSub.rows[0].id; 
+    const currentEndDate = new Date(activeSub.rows[0].end_date);
+    currentEndDate.setDate(currentEndDate.getDate() + planDurationDays);
+    newEndDate = currentEndDate;
+
+    await pool.query(
+      "UPDATE subscriptions SET end_date = $1, plan_id = $2 WHERE id = $3",
+      [newEndDate, planId, subscriptionId],
+    );
+  } else {
+    newEndDate = new Date();
+    newEndDate.setDate(newEndDate.getDate() + planDurationDays);
+
+    const insertResult = await pool.query(
+      "INSERT INTO subscriptions (user_id, plan_id, end_date, status) VALUES ($1, $2, $3, 'active') RETURNING id",
+      [userId, planId, newEndDate],
+    );
+    subscriptionId = insertResult.rows[0].id;
+  }
+
+  return { id: subscriptionId };
+};
