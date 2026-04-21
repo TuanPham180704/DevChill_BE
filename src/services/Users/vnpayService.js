@@ -1,6 +1,13 @@
 import crypto from "crypto";
 import qs from "qs";
 import dayjs from "dayjs";
+// Import thêm plugin để xử lý múi giờ chuẩn Việt Nam khi đưa lên Server
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
+
+// Kích hoạt plugin cho dayjs
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 function sortObject(obj) {
   let sorted = {};
@@ -36,17 +43,14 @@ export const buildVnpayUrl = ({ orderId, amount, orderInfo }) => {
     vnp_Locale: "vn",
     vnp_ReturnUrl: returnUrl,
     vnp_IpAddr: "127.0.0.1",
-    vnp_CreateDate: dayjs().format("YYYYMMDDHHmmss"),
+    vnp_CreateDate: dayjs().tz("Asia/Ho_Chi_Minh").format("YYYYMMDDHHmmss"),
   };
   params = sortObject(params);
-
   const sign = qs.stringify(params, { encode: false });
   const hash = crypto
     .createHmac("sha512", secret)
     .update(Buffer.from(sign, "utf-8"))
     .digest("hex");
-
   params.vnp_SecureHash = hash;
-
   return `${url}?${qs.stringify(params, { encode: false })}`;
 };

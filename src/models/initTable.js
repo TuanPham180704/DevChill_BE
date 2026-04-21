@@ -292,7 +292,7 @@ const initTables = async () => {
         user_id INTEGER REFERENCES users(id),
         plan_id INTEGER REFERENCES plans(id),
         subscription_id INTEGER REFERENCES subscriptions(id),
-
+        failure_reason TEXT,
         amount NUMERIC,
         payment_method VARCHAR(50) DEFAULT 'vnpay',
 
@@ -308,7 +308,10 @@ const initTables = async () => {
 
         paid_at TIMESTAMP,
         raw_response JSONB,
-
+         verified_by_admin INTEGER REFERENCES users(id),
+        verified_at TIMESTAMP,
+        note TEXT,
+ 
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);

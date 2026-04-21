@@ -135,10 +135,11 @@ export const vnpayIPN = async (req, res) => {
         `UPDATE payments 
          SET status = 'failed', 
              vnp_response_code = $1, 
-             raw_response = $2
+             raw_response = $2,
+             failure_reason = $3
              -- Nếu database của bạn có cột error_message thì có thể truyền $4 vào đây
-         WHERE vnp_txn_ref = $3`,
-        [code, JSON.stringify(originalParams), txnRef],
+         WHERE vnp_txn_ref = $4`,
+        [code, JSON.stringify(originalParams), errorMessage, txnRef],
       );
     }
     return res.json({ RspCode: "00", Message: "Confirm Success" });

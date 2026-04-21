@@ -34,7 +34,11 @@ export const revokePremiumUsersService = async () => {
     UPDATE users
     SET is_premium = false
     WHERE id IN (
-      SELECT user_id FROM subscriptions WHERE status='expired'
+      SELECT user_id FROM subscriptions WHERE status = 'expired'
+    )
+    AND id NOT IN (
+      -- Loại trừ những user VẪN CÒN gói active chưa hết hạn
+      SELECT user_id FROM subscriptions WHERE status = 'active' AND end_date > NOW()
     )
   `);
 };

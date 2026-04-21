@@ -16,25 +16,30 @@ export const getPlanByIdService = async (id) => {
 };
 
 export const getMySubscriptionService = async (userId) => {
-  const result = await pool.query(
-    `SELECT s.*, p.name FROM subscriptions s 
+  const allActiveSubs = await pool.query(
+    `SELECT s.id, s.plan_id, s.start_date, s.end_date, s.status, p.name 
+     FROM subscriptions s 
      JOIN plans p ON p.id = s.plan_id 
-     WHERE s.user_id = $1 AND s.status = 'active'
-     LIMIT 1`,
+     WHERE s.user_id = $1 AND s.status = 'active' AND s.end_date > NOW()
+     ORDER BY s.start_date ASC`,
     [userId],
   );
-
-  const sub = result.rows[0];
-  if (!sub) return null;
-
+  if (allActiveSubs.rows.length === 0) return null;
   const now = new Date();
-  const endDate = new Date(sub.end_date);
-  const diffTime = endDate - now;
-  const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const maxEndDate = new Date(
+    allActiveSubs.rows[allActiveSubs.rows.length - 1].end_date,
+  );
+  const diffTime = maxEndDate - now;
+  const totalDaysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const currentPlan = allActiveSubs.rows[0];
+  const upcomingPlans = allActiveSubs.rows.slice(1);
   return {
-    ...sub,
-    days_left: daysLeft > 0 ? daysLeft : 0,
-    should_warn: daysLeft <= 3 && daysLeft > 0,
+    total_days_left: totalDaysLeft > 0 ? totalDaysLeft : 0,
+    max_end_date: maxEndDate,
+    should_warn: totalDaysLeft <= 3 && totalDaysLeft > 0,
+    current_plan: currentPlan,
+    upcoming_plans: upcomingPlans,
+    all_details: allActiveSubs.rows,
   };
 };
 
@@ -63,34 +68,27 @@ export const processSuccessfulPaymentService = async (
   planId,
   planDurationDays,
 ) => {
-  const activeSub = await pool.query(
-    "SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1",
+  const latestSub = await pool.query(
+    `SELECT end_date FROM subscriptions 
+     WHERE user_id = $1 AND status = 'active' 
+     ORDER BY end_date DESC LIMIT 1`,
     [userId],
   );
 
-  let newEndDate;
-  let subscriptionId;
-
-  if (activeSub.rows.length > 0) {
-    subscriptionId = activeSub.rows[0].id; 
-    const currentEndDate = new Date(activeSub.rows[0].end_date);
-    currentEndDate.setDate(currentEndDate.getDate() + planDurationDays);
-    newEndDate = currentEndDate;
-
-    await pool.query(
-      "UPDATE subscriptions SET end_date = $1, plan_id = $2 WHERE id = $3",
-      [newEndDate, planId, subscriptionId],
-    );
-  } else {
-    newEndDate = new Date();
-    newEndDate.setDate(newEndDate.getDate() + planDurationDays);
-
-    const insertResult = await pool.query(
-      "INSERT INTO subscriptions (user_id, plan_id, end_date, status) VALUES ($1, $2, $3, 'active') RETURNING id",
-      [userId, planId, newEndDate],
-    );
-    subscriptionId = insertResult.rows[0].id;
+  let newStartDate = new Date();
+  if (
+    latestSub.rows.length > 0 &&
+    new Date(latestSub.rows[0].end_date) > new Date()
+  ) {
+    newStartDate = new Date(latestSub.rows[0].end_date);
   }
+  const newEndDate = new Date(newStartDate);
+  newEndDate.setDate(newEndDate.getDate() + planDurationDays);
+  const insertResult = await pool.query(
+    `INSERT INTO subscriptions (user_id, plan_id, start_date, end_date, status) 
+     VALUES ($1, $2, $3, $4, 'active') RETURNING id`,
+    [userId, planId, newStartDate, newEndDate],
+  );
 
-  return { id: subscriptionId };
+  return { id: insertResult.rows[0].id };
 };

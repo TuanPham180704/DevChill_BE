@@ -33,7 +33,7 @@ export const createPayment = async (req, res) => {
 
     return res.json({
       message: "Tạo thanh toán thành công",
-      paymentUrl: url,
+      vnpUrl: url,
     });
   } catch (err) {
     return res.status(500).json({
