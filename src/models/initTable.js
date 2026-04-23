@@ -2,6 +2,7 @@ import pool from "../config/db.js";
 
 const initTables = async () => {
   try {
+    // ================== EXISTING TABLES ==================
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -224,14 +225,6 @@ const initTables = async () => {
     `);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS contract_movies (
-        contract_id INTEGER REFERENCES contracts(id) ON DELETE CASCADE,
-        movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
-        PRIMARY KEY (contract_id, movie_id)
-      );
-    `);
-
-    await pool.query(`
       CREATE TABLE IF NOT EXISTS watch_history (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -275,13 +268,10 @@ const initTables = async () => {
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         plan_id INTEGER REFERENCES plans(id),
-
         start_date TIMESTAMP,
         end_date TIMESTAMP,
-
         status VARCHAR(20) DEFAULT 'pending'
           CHECK (status IN ('pending', 'active', 'expired', 'cancelled')),
-
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -295,81 +285,96 @@ const initTables = async () => {
         failure_reason TEXT,
         amount NUMERIC,
         payment_method VARCHAR(50) DEFAULT 'vnpay',
-
         status VARCHAR(20) DEFAULT 'pending'
           CHECK (status IN ('pending', 'success', 'failed')),
-
         transaction_code VARCHAR(100),
-
         vnp_txn_ref VARCHAR(100) UNIQUE,
         vnp_transaction_no VARCHAR(100),
         vnp_response_code VARCHAR(10),
         vnp_bank_code VARCHAR(20),
-
         paid_at TIMESTAMP,
         raw_response JSONB,
-         verified_by_admin INTEGER REFERENCES users(id),
+        verified_by_admin INTEGER REFERENCES users(id),
         verified_at TIMESTAMP,
         note TEXT,
- 
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // ================== VNPAY TRANSACTIONS ==================
+    // ================== 🎬 SHOWTIMES ==================
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS vnpay_transactions (
+      CREATE TABLE IF NOT EXISTS showtimes (
         id SERIAL PRIMARY KEY,
-        payment_id INTEGER REFERENCES payments(id) ON DELETE CASCADE,
 
-        vnp_txn_ref VARCHAR(100) UNIQUE,
-        vnp_transaction_no VARCHAR(100),
-        vnp_amount NUMERIC,
-        vnp_bank_code VARCHAR(20),
-        vnp_response_code VARCHAR(10),
-        vnp_order_info TEXT,
+        movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
+        episode_id INTEGER REFERENCES episodes(id) ON DELETE CASCADE,
 
-        status VARCHAR(20),
+        start_time TIMESTAMP NOT NULL,
+        end_time TIMESTAMP NOT NULL,
+
+        status VARCHAR(20) DEFAULT 'scheduled'
+          CHECK (status IN ('scheduled', 'live', 'ended', 'cancelled')),
+
+        allow_watch BOOLEAN DEFAULT TRUE,
+
+        is_premiere BOOLEAN DEFAULT FALSE,
+        max_viewers INTEGER,
+
+        created_by INTEGER REFERENCES users(id),
 
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
+    // ================== 🔔 REMINDERS ==================
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS showtime_reminders (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        showtime_id INTEGER REFERENCES showtimes(id) ON DELETE CASCADE,
+        remind_before_minutes INTEGER DEFAULT 5,
+        is_notified BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, showtime_id)
+      );
+    `);
+
+    // ================== 👀 VIEW TRACKING (OPTIONAL) ==================
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS showtime_views (
+        id SERIAL PRIMARY KEY,
+        showtime_id INTEGER REFERENCES showtimes(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        left_at TIMESTAMP,
+        UNIQUE(showtime_id, user_id)
+      );
+    `);
+
     // ================== INDEX ==================
     await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_messages_movie ON messages(movie_id);`,
+      `CREATE INDEX IF NOT EXISTS idx_showtime_movie ON showtimes(movie_id);`,
     );
     await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_watch_user ON watch_history(user_id);`,
+      `CREATE INDEX IF NOT EXISTS idx_showtime_status ON showtimes(status);`,
     );
     await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_people_name ON people(name);`,
-    );
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_episode_movie ON episodes(movie_id);`,
-    );
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_stream_episode ON episode_streams(episode_id);`,
-    );
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_movie_category ON movie_categories(category_id);`,
-    );
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_movie_country ON movie_countries(country_id);`,
+      `CREATE INDEX IF NOT EXISTS idx_showtime_time ON showtimes(start_time, end_time);`,
     );
 
     await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_payment_txn_ref ON payments(vnp_txn_ref);`,
+      `CREATE INDEX IF NOT EXISTS idx_reminder_user ON showtime_reminders(user_id);`,
     );
     await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_payment_user ON payments(user_id);`,
-    );
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_sub_user ON subscriptions(user_id);`,
+      `CREATE INDEX IF NOT EXISTS idx_reminder_showtime ON showtime_reminders(showtime_id);`,
     );
 
-    console.log(" FINAL DB READY (PRODUCTION + VNPAY) 🚀");
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_views_showtime ON showtime_views(showtime_id);`,
+    );
+
+    console.log(" FINAL DB READY + SHOWTIME SYSTEM 🚀");
   } catch (err) {
     console.error(" Error:", err);
   }

@@ -13,10 +13,11 @@ import adminUserRoutes from "./routes/Admin/userAdRoutes.js";
 import adminContractRoutes from "./routes/Admin/contractRoutes.js";
 import adminMovieRoutes from "./routes/Admin/movieAdminRoutes.js";
 import adminPlanRoutes from "./routes/Admin/adminPlanRoutes.js";
+import adminShowimeRoutes from "./routes/Admin/showtimeRoutes.js";
 import paymentRoutes from "./routes/admin/paymentRoutes.js";
 import planRoutes from "./routes/Users/userPlanRoutes.js";
 import profileRoutes from "./routes/Users/userRoutes.js";
-
+import showtimesRoutes from "./routes/Users/showtimeRoutes.js";
 import publicMoviesRoutes from "./routes/moviePublicRoutes.js";
 dotenv.config();
 
@@ -38,8 +39,10 @@ app.use("/api/admin/contracts", adminContractRoutes);
 app.use("/api/admin/movies", adminMovieRoutes);
 app.use("/api/admin/plans", adminPlanRoutes);
 app.use("/api/admin/payments", paymentRoutes);
+app.use("/api/admin/showtimes", adminShowimeRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/plans", planRoutes);
+app.use("/api/showtimes", showtimesRoutes);
 
 app.use("/api/movies", publicMoviesRoutes);
 
