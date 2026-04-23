@@ -18,12 +18,20 @@ export const getPublicMovies = async (query) => {
   const page = Math.max(parseInt(query.page) || 1, 1);
   const limit = Math.min(parseInt(query.limit) || 10, 50);
   const offset = (page - 1) * limit;
-  const { keyword, type, year, category, country, lifecycle_status } = query;
+  const {
+    keyword,
+    type,
+    year,
+    category,
+    country,
+    lifecycle_status,
+    is_premium,
+  } = query;
   const { add, values } = buildParams();
   const where = [
     "m.is_available = true",
     "c.status = 'active'",
-    "m.status = 'published'", 
+    "m.status = 'published'",
   ];
 
   if (keyword?.trim()) {
@@ -69,7 +77,10 @@ export const getPublicMovies = async (query) => {
       )
     `);
   }
-
+  if (is_premium !== undefined) {
+    const isPremiumBool = is_premium === "true";
+    where.push(`m.is_premium = ${add(isPremiumBool)}`);
+  }
   const whereSQL = `WHERE ${where.join(" AND ")}`;
   const baseQuery = `
     FROM movies m

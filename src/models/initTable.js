@@ -246,8 +246,6 @@ const initTables = async () => {
         PRIMARY KEY (user_id, movie_id)
       );
     `);
-
-    // ================== PLANS ==================
     await pool.query(`
       CREATE TABLE IF NOT EXISTS plans (
         id SERIAL PRIMARY KEY,
@@ -261,8 +259,6 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-
-    // ================== SUBSCRIPTIONS ==================
     await pool.query(`
       CREATE TABLE IF NOT EXISTS subscriptions (
         id SERIAL PRIMARY KEY,
@@ -300,8 +296,6 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-
-    // ================== 🎬 SHOWTIMES ==================
     await pool.query(`
       CREATE TABLE IF NOT EXISTS showtimes (
         id SERIAL PRIMARY KEY,
@@ -326,8 +320,6 @@ const initTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-
-    // ================== 🔔 REMINDERS ==================
     await pool.query(`
       CREATE TABLE IF NOT EXISTS showtime_reminders (
         id SERIAL PRIMARY KEY,
@@ -339,8 +331,6 @@ const initTables = async () => {
         UNIQUE(user_id, showtime_id)
       );
     `);
-
-    // ================== 👀 VIEW TRACKING (OPTIONAL) ==================
     await pool.query(`
       CREATE TABLE IF NOT EXISTS showtime_views (
         id SERIAL PRIMARY KEY,
@@ -351,8 +341,6 @@ const initTables = async () => {
         UNIQUE(showtime_id, user_id)
       );
     `);
-
-    // ================== INDEX ==================
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_showtime_movie ON showtimes(movie_id);`,
     );
