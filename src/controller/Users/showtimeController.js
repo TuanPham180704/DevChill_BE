@@ -2,12 +2,13 @@ import * as showtimeUserService from "../../services/Users/showtimeServices.js";
 
 export const getAllPublic = async (req, res) => {
   try {
-    const showtimes = await showtimeUserService.getPublicShowtimes();
+    const showtimes = await showtimeUserService.getPublicShowtimes(req.query);
     res.status(200).json({ success: true, data: showtimes });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 export const getDetail = async (req, res) => {
   try {
     const showtime = await showtimeUserService.getShowtimeWatchDetail(
@@ -34,11 +35,13 @@ export const watchPremiere = async (req, res) => {
 
     const showtime =
       await showtimeUserService.getShowtimeWatchDetail(showtimeId);
+
     if (!showtime) {
       return res
         .status(404)
         .json({ success: false, message: "Không tìm thấy suất chiếu" });
     }
+
     if (showtime.status === "cancelled") {
       return res.status(200).json({
         success: true,
@@ -47,7 +50,7 @@ export const watchPremiere = async (req, res) => {
           "Suất chiếu này đã bị hủy bởi quản trị viên. Vui lòng quay lại sau.",
       });
     }
-    if (showtime.movie_is_premium && !user.is_premium) {
+    if (showtime.movie_is_premium && !user?.is_premium) {
       return res.status(403).json({
         success: false,
         message:
@@ -66,6 +69,7 @@ export const watchPremiere = async (req, res) => {
         message: "Phim chưa đến giờ công chiếu. Vui lòng quay lại sau.",
       });
     }
+
     if (now > end) {
       return res.status(200).json({
         success: true,
@@ -73,8 +77,12 @@ export const watchPremiere = async (req, res) => {
         message: "Suất chiếu đã kết thúc.",
       });
     }
-
     const currentOffset = Math.floor((now - start) / 1000);
+    if (!showtime.streams || showtime.streams.length === 0) {
+      console.warn(
+        `[WARNING] Showtime ${showtimeId} is playing but stream is empty. Check DB status update cronjob!`,
+      );
+    }
 
     res.status(200).json({
       success: true,
@@ -82,6 +90,8 @@ export const watchPremiere = async (req, res) => {
       data: {
         movie_name: showtime.movie_name,
         episode_name: showtime.episode_name,
+        description: showtime.description,
+        actors: showtime.actors, 
         current_offset: currentOffset,
         streams: showtime.streams,
       },

@@ -8,7 +8,22 @@ export const getPublicShowtimes = async (query = {}) => {
     SELECT 
       s.id, s.start_time, s.end_time, s.status,
       m.name AS movie_name, m.poster_url, m.is_premium AS movie_is_premium,
-      e.name AS episode_name, e.episode_number
+      m.content AS description, -- Lấy mô tả phim từ cột content
+      e.name AS episode_name, e.episode_number,
+      
+      -- Lấy danh sách diễn viên dưới dạng mảng JSON
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object('id', p.id, 'name', p.name)
+          )
+          FROM movie_people mp
+          JOIN people p ON p.id = mp.person_id
+          WHERE mp.movie_id = m.id AND mp.role = 'actor'
+        ), 
+        '[]'::json
+      ) AS actors
+
     FROM showtimes s
     JOIN movies m ON s.movie_id = m.id
     JOIN episodes e ON s.episode_id = e.id
@@ -21,12 +36,27 @@ export const getPublicShowtimes = async (query = {}) => {
   const res = await pool.query(sql, [limit, offset]);
   return res.rows;
 };
+
 export const getShowtimeWatchDetail = async (id) => {
   const query = `
     SELECT 
       s.*, 
       m.name AS movie_name, m.poster_url, m.is_premium AS movie_is_premium,
+      m.content AS description, -- Lấy mô tả phim
       e.name AS episode_name, e.episode_number, e.season,
+      
+      -- Lấy danh sách diễn viên dưới dạng mảng JSON
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object('id', p.id, 'name', p.name)
+          )
+          FROM movie_people mp
+          JOIN people p ON p.id = mp.person_id
+          WHERE mp.movie_id = m.id AND mp.role = 'actor'
+        ), 
+        '[]'::json
+      ) AS actors,
       
       -- BẢO MẬT: Chỉ trả về mảng stream nếu trạng thái đang là LIVE
       CASE 
