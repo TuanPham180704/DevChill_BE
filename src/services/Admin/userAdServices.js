@@ -12,7 +12,7 @@ export async function getAllUsers({ page = 1, limit = 10 }) {
   const dataRes = await pool.query(
     `
     SELECT id, username, email, gender, avatar_url,
-           role, is_premium, is_active, is_locked,
+           role, is_premium, is_active, is_locked,block_reason, lock_until,
            created_at, updated_at
     FROM users
     WHERE deleted_at IS NULL
