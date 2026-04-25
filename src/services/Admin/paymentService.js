@@ -2,7 +2,8 @@
 import pool from "../../config/db.js";
 
 export const getAllPaymentsService = async (filters) => {
-  const { status, user_id } = filters;
+  // Bổ sung thêm biến search từ filters
+  const { status, user_id, search } = filters;
 
   let query = `
     SELECT p.*, u.username, pl.name as plan_name
@@ -21,6 +22,13 @@ export const getAllPaymentsService = async (filters) => {
   if (user_id) {
     values.push(user_id);
     query += ` AND p.user_id = $${values.length}`;
+  }
+
+  // THÊM MỚI: Xử lý tìm kiếm theo mã giao dịch (vnp_txn_ref) hoặc username
+  if (search) {
+    values.push(`%${search}%`);
+    // Dùng ILIKE trong PostgreSQL để tìm kiếm không phân biệt hoa thường
+    query += ` AND (p.vnp_txn_ref ILIKE $${values.length} OR u.username ILIKE $${values.length})`;
   }
 
   query += ` ORDER BY p.created_at DESC`;
@@ -100,7 +108,8 @@ export const verifyPaymentService = async (paymentId, adminId, note) => {
            verified_at = NOW(),
            note = $2,
            paid_at = NOW(),
-           subscription_id = $3
+           subscription_id = $3,
+           failure_reason = NULL -- THÊM MỚI: Xóa lỗi nếu Admin duyệt tay thành công
        WHERE id = $4`,
       [adminId, note, newSubId, paymentId],
     );

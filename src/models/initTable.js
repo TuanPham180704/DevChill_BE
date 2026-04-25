@@ -273,29 +273,30 @@ const initTables = async () => {
     `);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS payments (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id),
-        plan_id INTEGER REFERENCES plans(id),
-        subscription_id INTEGER REFERENCES subscriptions(id),
-        failure_reason TEXT,
-        amount NUMERIC,
-        payment_method VARCHAR(50) DEFAULT 'vnpay',
-        status VARCHAR(20) DEFAULT 'pending'
-          CHECK (status IN ('pending', 'success', 'failed')),
-        transaction_code VARCHAR(100),
-        vnp_txn_ref VARCHAR(100) UNIQUE,
-        vnp_transaction_no VARCHAR(100),
-        vnp_response_code VARCHAR(10),
-        vnp_bank_code VARCHAR(20),
-        paid_at TIMESTAMP,
-        raw_response JSONB,
-        verified_by_admin INTEGER REFERENCES users(id),
-        verified_at TIMESTAMP,
-        note TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+  CREATE TABLE IF NOT EXISTS payments (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    plan_id INTEGER REFERENCES plans(id),
+    subscription_id INTEGER REFERENCES subscriptions(id),
+    failure_reason TEXT,
+    amount NUMERIC,
+    payment_method VARCHAR(50) DEFAULT 'vnpay',
+    status VARCHAR(20) DEFAULT 'pending',
+    transaction_code VARCHAR(100),
+    vnp_txn_ref VARCHAR(100) UNIQUE,
+    vnp_transaction_no VARCHAR(100),
+    vnp_response_code VARCHAR(10),
+    vnp_bank_code VARCHAR(20),
+    paid_at TIMESTAMP,
+    raw_response JSONB,
+    verified_by_admin INTEGER REFERENCES users(id),
+    verified_at TIMESTAMP,
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT payments_status_check 
+      CHECK (status IN ('pending', 'success', 'failed', 'cancelled', 'expired'))
+  );
+`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS showtimes (
         id SERIAL PRIMARY KEY,

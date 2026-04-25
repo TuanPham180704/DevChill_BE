@@ -3,8 +3,31 @@ import qs from "qs";
 import pool from "../../config/db.js";
 import { processSuccessfulPaymentService } from "../../services/Users/planUserServies.js";
 import dotenv from "dotenv";
-dotenv.config();
+import cron from "node-cron";
 
+dotenv.config();
+cron.schedule("*/5 * * * *", async () => {
+  try {
+    const result = await pool.query(`
+      UPDATE payments 
+      SET status = 'expired', 
+          failure_reason = 'Hết thời gian thanh toán (Hệ thống tự động hủy)' 
+      WHERE status = 'pending' 
+        AND created_at < NOW() - INTERVAL '15 minutes'
+    `);
+
+    if (result.rowCount > 0) {
+      console.log(
+        `[Cronjob VNPay] Đã tự động dọn dẹp ${result.rowCount} đơn hàng treo (quá 15 phút).`,
+      );
+    }
+  } catch (error) {
+    console.error(
+      "[Cronjob VNPay Error] Lỗi khi auto expire giao dịch:",
+      error,
+    );
+  }
+});
 function sortObject(obj) {
   let sorted = {};
   let str = [];
@@ -69,6 +92,7 @@ export const vnpayIPN = async (req, res) => {
       .createHmac("sha512", process.env.VNP_HASH_SECRET)
       .update(Buffer.from(sign, "utf-8"))
       .digest("hex");
+
     if (check !== secureHash) {
       return res.json({ RspCode: "97", Message: "Sai chữ ký" });
     }
@@ -77,11 +101,13 @@ export const vnpayIPN = async (req, res) => {
     const code = originalParams.vnp_ResponseCode;
     const transactionNo = originalParams.vnp_TransactionNo || null;
     const bankCode = originalParams.vnp_BankCode || null;
+
     const paymentResult = await pool.query(
       `SELECT * FROM payments WHERE vnp_txn_ref=$1`,
       [txnRef],
     );
     const payment = paymentResult.rows[0];
+
     if (!payment) {
       return res.json({ RspCode: "01", Message: "Không tồn tại đơn hàng" });
     }
@@ -91,6 +117,7 @@ export const vnpayIPN = async (req, res) => {
         Message: "Đơn hàng đã được cập nhật trước đó",
       });
     }
+
     if (code === "00") {
       await pool.query(
         `UPDATE payments 
@@ -103,18 +130,22 @@ export const vnpayIPN = async (req, res) => {
          WHERE vnp_txn_ref = $5`,
         [transactionNo, code, bankCode, JSON.stringify(originalParams), txnRef],
       );
+
       await pool.query(`UPDATE users SET is_premium = true WHERE id = $1`, [
         payment.user_id,
       ]);
+
       const planResult = await pool.query(`SELECT * FROM plans WHERE id=$1`, [
         payment.plan_id,
       ]);
       const plan = planResult.rows[0];
+
       const newSub = await processSuccessfulPaymentService(
         payment.user_id,
         payment.plan_id,
         plan.duration_days,
       );
+
       await pool.query(
         `UPDATE payments 
          SET subscription_id = $1, 
@@ -127,21 +158,35 @@ export const vnpayIPN = async (req, res) => {
       console.log(`[VNPay] Thanh toán thành công cho đơn hàng: ${txnRef}`);
     } else {
       const errorMessage = getVnPayErrorMessage(code);
+      let paymentStatus = "failed";
+
+      if (code === "24") {
+        paymentStatus = "cancelled";
+      } else if (code === "11") {
+        paymentStatus = "expired";
+      }
+
       console.log(
-        `[VNPay] Giao dịch thất bại: Đơn hàng ${txnRef} - Lỗi: ${errorMessage} (Mã: ${code})`,
+        `[VNPay] Giao dịch ${paymentStatus}: Đơn hàng ${txnRef} - Lỗi: ${errorMessage} (Mã: ${code})`,
       );
 
       await pool.query(
         `UPDATE payments 
-         SET status = 'failed', 
-             vnp_response_code = $1, 
-             raw_response = $2,
-             failure_reason = $3
-             -- Nếu database của bạn có cột error_message thì có thể truyền $4 vào đây
-         WHERE vnp_txn_ref = $4`,
-        [code, JSON.stringify(originalParams), errorMessage, txnRef],
+         SET status = $1, 
+             vnp_response_code = $2, 
+             raw_response = $3,
+             failure_reason = $4
+         WHERE vnp_txn_ref = $5`,
+        [
+          paymentStatus,
+          code,
+          JSON.stringify(originalParams),
+          errorMessage,
+          txnRef,
+        ],
       );
     }
+
     return res.json({ RspCode: "00", Message: "Confirm Success" });
   } catch (err) {
     console.error("IPN Error:", err);
