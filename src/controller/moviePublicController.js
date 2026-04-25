@@ -62,17 +62,9 @@ export const getYears = async (req, res) => {
 export const watchMovie = async (req, res) => {
   try {
     const { slug } = req.params;
-
-    console.log("🔥 REQ USER:", req.user);
-    console.log("🔥 SLUG:", slug);
-    console.log("🔥 QUERY:", req.query);
-
     const user = req.user || null;
 
     const data = await movieService.getMovieWatch(slug, req.query, user);
-
-    console.log("🔥 SERVICE RESULT:", data);
-
     if (!data) {
       return res.status(404).json({
         success: false,
@@ -81,7 +73,6 @@ export const watchMovie = async (req, res) => {
     }
 
     if (data.locked) {
-      console.log("⛔ LOCKED HIT:", data);
       return res.status(403).json({
         success: false,
         ...data,
@@ -93,7 +84,6 @@ export const watchMovie = async (req, res) => {
       data,
     });
   } catch (err) {
-    console.error("❌ WATCH ERROR:", err);
     return res.status(500).json({
       success: false,
     });
