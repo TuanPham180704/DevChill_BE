@@ -90,25 +90,56 @@ export const updatePlanService = async (id, data) => {
 
   return result.rows[0];
 };
-export const getAllPlansAdminService = async (page = 1, limit = 10) => {
-  const offset = (page - 1) * limit;
+export const getAllPlansAdminService = async ({
+  page = 1,
+  limit = 10,
+  status,
+  sort_by,
+  order,
+}) => {
+  const safePage = Math.max(parseInt(page) || 1, 1);
+  const safeLimit = Math.min(parseInt(limit) || 10, 100);
+  const offset = (safePage - 1) * safeLimit;
+  const conditions = [];
+  const values = [];
 
-  const dataQuery = await pool.query(
-    `
-    SELECT * FROM plans
-    ORDER BY created_at DESC
-    LIMIT $1 OFFSET $2
-    `,
-    [limit, offset],
-  );
+  if (status) {
+    values.push(status);
+    conditions.push(`status = $${values.length}`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const ALLOWED_SORT_COLUMNS = {
+    id: "id",
+    name: "name",
+    price: "price",
+    duration_days: "duration_days",
+    status: "status",
+    created_at: "created_at",
+  };
+  const sortColumn = ALLOWED_SORT_COLUMNS[sort_by] || "created_at";
+  const sortDirection = (order || "").toLowerCase() === "asc" ? "ASC" : "DESC";
+  const [dataQuery, countQuery] = await Promise.all([
+    pool.query(
+      `
+      SELECT * FROM plans
+      ${where}
+      ORDER BY ${sortColumn} ${sortDirection} NULLS LAST
+      LIMIT $${values.length + 1} OFFSET $${values.length + 2}
+      `,
+      [...values, safeLimit, offset],
+    ),
+    pool.query(`SELECT COUNT(*) FROM plans ${where}`, values),
+  ]);
 
-  const countQuery = await pool.query(`SELECT COUNT(*) FROM plans`);
-
+  const totalRecords = parseInt(countQuery.rows[0].count);
   return {
     data: dataQuery.rows,
-    total: parseInt(countQuery.rows[0].count),
-    page,
-    limit,
+    pagination: {
+      total: totalRecords,
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.ceil(totalRecords / safeLimit),
+    },
   };
 };
 export const getPlanByIdService = async (id) => {

@@ -44,23 +44,58 @@ export const getAllShowtimes = async (query) => {
   const page = Math.max(parseInt(query.page) || 1, 1);
   const limit = Math.min(parseInt(query.limit) || 10, 50);
   const offset = (page - 1) * limit;
+  const { keyword, status, sort_by, order } = query;
+  const conditions = [];
+  const values = [];
 
-  const dataQuery = `
-    SELECT s.*, m.name AS movie_name, m.duration, e.name AS episode_name, e.episode_number
+  if (keyword) {
+    values.push(`%${keyword}%`);
+    conditions.push(`m.name ILIKE $${values.length}`);
+  }
+  if (status) {
+    values.push(status);
+    conditions.push(`s.status = $${values.length}`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const ALLOWED_SORT_COLUMNS = {
+    id: "s.id",
+    start_time: "s.start_time",
+    end_time: "s.end_time",
+    status: "s.status",
+    movie_name: "m.name",
+    episode_number: "e.episode_number",
+  };
+  const sortColumn = ALLOWED_SORT_COLUMNS[sort_by] || "s.start_time";
+  const sortDirection = (order || "").toLowerCase() === "asc" ? "ASC" : "DESC";
+  const baseFromJoins = `
     FROM showtimes s
-    JOIN movies m ON s.movie_id = m.id
-    JOIN episodes e ON s.episode_id = e.id
-    ORDER BY s.start_time DESC
-    LIMIT $1 OFFSET $2
+    LEFT JOIN movies m ON s.movie_id = m.id
+    LEFT JOIN episodes e ON s.episode_id = e.id
+    ${where}
   `;
-  const countQuery = `SELECT COUNT(*) FROM showtimes`;
+  const [dataRes, countRes] = await Promise.all([
+    pool.query(
+      `
+        SELECT s.*, m.name AS movie_name, m.duration, e.name AS episode_name, e.episode_number
+        ${baseFromJoins}
+        ORDER BY ${sortColumn} ${sortDirection} NULLS LAST
+        LIMIT $${values.length + 1} OFFSET $${values.length + 2}
+      `,
+      [...values, limit, offset],
+    ),
+    pool.query(`SELECT COUNT(*) AS total ${baseFromJoins}`, values),
+  ]);
 
-  const dataRes = await pool.query(dataQuery, [limit, offset]);
-  const countRes = await pool.query(countQuery);
+  const totalRecords = parseInt(countRes.rows[0].total);
 
   return {
     data: dataRes.rows,
-    pagination: { total: parseInt(countRes.rows[0].count), page, limit },
+    pagination: {
+      total: totalRecords,
+      page,
+      limit,
+      totalPages: Math.ceil(totalRecords / limit), 
+    },
   };
 };
 

@@ -338,8 +338,17 @@ export const getAll = async (query) => {
   const page = Math.max(parseInt(query.page) || 1, 1);
   const limit = Math.min(parseInt(query.limit) || 10, 50);
   const offset = (page - 1) * limit;
-  const { keyword, status, type, year, category, country, lifecycle_status } =
-    query;
+  const {
+    keyword,
+    status,
+    type,
+    year,
+    category,
+    country,
+    lifecycle_status,
+    sort_by,
+    order,
+  } = query;
 
   let where = [];
   let values = [];
@@ -382,6 +391,15 @@ export const getAll = async (query) => {
   }
 
   const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const ALLOWED_SORT_COLUMNS = {
+    id: "m.id",
+    year: "m.year",
+    name: "m.name",
+    episode_total: "m.episode_total",
+    created_at: "m.created_at",
+  };
+  const sortColumn = ALLOWED_SORT_COLUMNS[sort_by] || "m.created_at";
+  const sortDirection = (order || "").toLowerCase() === "asc" ? "ASC" : "DESC";
   const statsQuery = `
   SELECT
     COUNT(*) FILTER (WHERE status = 'draft') AS draft,
@@ -398,7 +416,7 @@ export const getAll = async (query) => {
     LEFT JOIN movie_countries mco ON mco.movie_id = m.id
     LEFT JOIN countries c ON c.id = mco.country_id
     ${whereSQL}
-    ORDER BY m.created_at DESC
+    ORDER BY ${sortColumn} ${sortDirection} NULLS LAST
     LIMIT $${i++} OFFSET $${i}
   `;
 
@@ -416,6 +434,7 @@ export const getAll = async (query) => {
   const countRes = await pool.query(countQuery, values);
   const statsRes = await pool.query(statsQuery);
   const statsRow = statsRes.rows[0];
+
   return {
     data: dataRes.rows,
     pagination: {

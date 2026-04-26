@@ -32,12 +32,17 @@ export const updatePlan = async (req, res) => {
 
 export const getAllPlansAdmin = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const { page, limit, keyword, status, sort_by, order } = req.query;
+    const result = await planService.getAllPlansAdminService({
+      page,
+      limit,
+      keyword,
+      status,
+      sort_by,
+      order,
+    });
 
-    const result = await planService.getAllPlansAdminService(page, limit);
-
-    res.json(result);
+    res.status(200).json(result);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

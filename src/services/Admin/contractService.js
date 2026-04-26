@@ -36,6 +36,8 @@ export async function getContracts({
   status,
   start_date,
   end_date,
+  sort_by, 
+  order,
   page = 1,
   limit = 10,
 }) {
@@ -61,9 +63,18 @@ export async function getContracts({
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const ALLOWED_SORT_COLUMNS = {
+    id: "id",
+    name: "name",
+    status: "status",
+    start_date: "start_date",
+    end_date: "end_date",
+  };
 
+  const sortColumn = ALLOWED_SORT_COLUMNS[sort_by] || "id";
+  const sortDirection = (order || "").toLowerCase() === "asc" ? "ASC" : "DESC";
   const dataRes = await pool.query(
-    `SELECT * FROM contracts ${where} ORDER BY id DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+    `SELECT * FROM contracts ${where} ORDER BY ${sortColumn} ${sortDirection} NULLS LAST LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
     [...values, limit, offset],
   );
 
@@ -71,6 +82,7 @@ export async function getContracts({
     `SELECT COUNT(*) AS total FROM contracts ${where}`,
     values,
   );
+
   const statsRes = await pool.query(`
   SELECT
     COUNT(*) FILTER (WHERE status = 'draft') AS draft,
@@ -79,7 +91,7 @@ export async function getContracts({
     COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
     COUNT(*) AS total
   FROM contracts
-`);
+  `);
 
   return {
     data: dataRes.rows,

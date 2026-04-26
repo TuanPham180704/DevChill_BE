@@ -2,8 +2,7 @@
 import pool from "../../config/db.js";
 
 export const getAllPaymentsService = async (filters) => {
-  // Bổ sung thêm biến search từ filters
-  const { status, user_id, search } = filters;
+  const { status, user_id, search, sort_by, order } = filters;
 
   let query = `
     SELECT p.*, u.username, pl.name as plan_name
@@ -24,14 +23,23 @@ export const getAllPaymentsService = async (filters) => {
     query += ` AND p.user_id = $${values.length}`;
   }
 
-  // THÊM MỚI: Xử lý tìm kiếm theo mã giao dịch (vnp_txn_ref) hoặc username
   if (search) {
     values.push(`%${search}%`);
-    // Dùng ILIKE trong PostgreSQL để tìm kiếm không phân biệt hoa thường
     query += ` AND (p.vnp_txn_ref ILIKE $${values.length} OR u.username ILIKE $${values.length})`;
   }
+  const ALLOWED_SORT_COLUMNS = {
+    id: "p.id",
+    amount: "p.amount",
+    status: "p.status",
+    vnp_txn_ref: "p.vnp_txn_ref",
+    created_at: "p.created_at",
+    username: "u.username",
+    plan_name: "pl.name",
+  };
 
-  query += ` ORDER BY p.created_at DESC`;
+  const sortColumn = ALLOWED_SORT_COLUMNS[sort_by] || "p.created_at";
+  const sortDirection = (order || "").toLowerCase() === "asc" ? "ASC" : "DESC";
+  query += ` ORDER BY ${sortColumn} ${sortDirection} NULLS LAST`;
 
   const result = await pool.query(query, values);
   return result.rows;

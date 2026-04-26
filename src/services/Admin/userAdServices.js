@@ -6,17 +6,32 @@ import { sendUnlockEmail } from "../../utils/sendUnlockEmail.js";
 
 const SALT = 10;
 
-export async function getAllUsers({ page = 1, limit = 10 }) {
+export async function getAllUsers({
+  page = 1,
+  limit = 10,
+  sort_by,
+  order,
+}) {
   const offset = (page - 1) * limit;
-
+  const ALLOWED_SORT_COLUMNS = {
+    id: "id",
+    username: "username",
+    email: "email",
+    role: "role",
+    is_premium: "is_premium",
+    is_active: "is_active",
+    created_at: "created_at",
+  };
+  const sortColumn = ALLOWED_SORT_COLUMNS[sort_by] || "id";
+  const sortDirection = (order || "").toLowerCase() === "asc" ? "ASC" : "DESC";
   const dataRes = await pool.query(
     `
     SELECT id, username, email, gender, avatar_url,
-           role, is_premium, is_active, is_locked,block_reason, lock_until,
+           role, is_premium, is_active, is_locked, block_reason, lock_until,
            created_at, updated_at
     FROM users
     WHERE deleted_at IS NULL
-    ORDER BY id DESC
+    ORDER BY ${sortColumn} ${sortDirection} NULLS LAST
     LIMIT $1 OFFSET $2
   `,
     [limit, offset],
@@ -52,7 +67,6 @@ export async function updateUser(id, data) {
   const values = [];
   let index = 1;
   if (data.email) {
-    // validate format
     if (!validator.isEmail(data.email)) {
       const err = new Error("Email không hợp lệ");
       err.status = 400;
