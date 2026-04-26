@@ -84,7 +84,6 @@ export const updateSetting = async (req, res) => {
       "is_available",
       "is_premium",
       "source",
-      "tmdb_id",
     ];
 
     const filtered = {};
@@ -129,7 +128,8 @@ export const getAll = async (req, res) => {
 
 export const getById = async (req, res) => {
   try {
-    const movie = await movieService.getById(req.params.id);
+    const is_public = req.query.is_public === "true";
+    const movie = await movieService.getById(req.params.id, is_public);
 
     if (!movie) {
       return res.status(404).json({

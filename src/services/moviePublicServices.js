@@ -3,6 +3,7 @@ import pool from "../config/db.js";
 const PUBLIC_STATUSES = ["published"];
 const MOVIE_TYPES = ["series", "movie"];
 const LIFECYCLE_STATUS = ["upcoming", "ongoing", "completed"];
+
 const buildParams = () => {
   const values = [];
 
@@ -18,6 +19,7 @@ export const getPublicMovies = async (query) => {
   const page = Math.max(parseInt(query.page) || 1, 1);
   const limit = Math.min(parseInt(query.limit) || 10, 50);
   const offset = (page - 1) * limit;
+
   const {
     keyword,
     type,
@@ -27,7 +29,9 @@ export const getPublicMovies = async (query) => {
     lifecycle_status,
     is_premium,
   } = query;
+
   const { add, values } = buildParams();
+
   const where = [
     "m.is_available = true",
     "c.status = 'active'",
@@ -41,6 +45,7 @@ export const getPublicMovies = async (query) => {
       m.origin_name ILIKE ${k}
     )`);
   }
+
   if (lifecycle_status && LIFECYCLE_STATUS.includes(lifecycle_status)) {
     where.push(`m.lifecycle_status = ${add(lifecycle_status)}`);
   }
@@ -77,11 +82,14 @@ export const getPublicMovies = async (query) => {
       )
     `);
   }
+
   if (is_premium !== undefined) {
     const isPremiumBool = is_premium === "true";
     where.push(`m.is_premium = ${add(isPremiumBool)}`);
   }
+
   const whereSQL = `WHERE ${where.join(" AND ")}`;
+
   const baseQuery = `
     FROM movies m
     JOIN contracts c ON c.id = m.contract_id
@@ -116,7 +124,7 @@ export const getPublicMovies = async (query) => {
     },
   };
 };
-export const getPublicMovieById = async (id) => {
+export const getPublicMovieById = async (id, is_public = false) => {
   const isNumeric = /^\d+$/.test(id);
 
   const movieRes = await pool.query(
@@ -143,6 +151,8 @@ export const getPublicMovieById = async (id) => {
   if (!movieRes.rows.length) return null;
 
   const movie = movieRes.rows[0];
+
+  const episodeCondition = is_public ? "AND e.is_published = TRUE" : "";
 
   const [categories, countries, people, episodes] = await Promise.all([
     pool.query(
@@ -185,7 +195,7 @@ export const getPublicMovieById = async (id) => {
        FROM episodes e
        LEFT JOIN episode_streams es ON es.episode_id = e.id
        LEFT JOIN servers s ON s.id = es.server_id
-       WHERE e.movie_id = $1
+       WHERE e.movie_id = $1 ${episodeCondition}
        GROUP BY e.id
        ORDER BY e.season, e.episode_number`,
       [movie.id],
@@ -199,14 +209,14 @@ export const getPublicMovieById = async (id) => {
       categories: categories.rows,
       countries: countries.rows,
       people: people.rows,
-      episodes: movie.lifecycle_status === "upcoming" ? [] : episodes.rows,
+      episodes: episodes.rows,
     },
   };
 };
-
 export const getMovieWatch = async (slug, query, user = null) => {
   const ep = Number(query.ep) || 1;
   const server = query.server;
+  const is_public = query.is_public === "true";
 
   const movieRes = await pool.query(
     `
@@ -224,7 +234,6 @@ export const getMovieWatch = async (slug, query, user = null) => {
   if (!movieRes.rows.length) return null;
 
   const movie = movieRes.rows[0];
-
   if (movie.is_premium && !user?.is_premium) {
     return {
       success: true,
@@ -233,37 +242,28 @@ export const getMovieWatch = async (slug, query, user = null) => {
     };
   }
 
-  if (movie.lifecycle_status === "upcoming") {
-    return {
-      success: true,
-      locked: true,
-      message: "Phim chưa phát hành",
-    };
-  }
+  const episodeCondition = is_public ? "AND is_published = TRUE" : "";
 
   const episodesRes = await pool.query(
     `
     SELECT id, movie_id, episode_number, name, slug
     FROM episodes
-    WHERE movie_id = $1
+    WHERE movie_id = $1 ${episodeCondition}
     ORDER BY episode_number ASC
     `,
     [movie.id],
   );
 
   const episodes = episodesRes.rows;
-
   if (!episodes.length) {
     return {
       success: true,
       locked: true,
-      message: "Phim chưa có tập nào",
+      message: "Phim hiện chưa có tập nào khả dụng",
     };
   }
-
   const episode =
     episodes.find((e) => Number(e.episode_number) === ep) || episodes[0];
-
   const streamRes = await pool.query(
     `
     SELECT es.*, s.name as server_name
@@ -302,7 +302,6 @@ export const getCategories = async () => {
     FROM categories
     ORDER BY name ASC
   `);
-
   return { success: true, data: res.rows };
 };
 
@@ -312,10 +311,8 @@ export const getCountries = async () => {
     FROM countries
     ORDER BY name ASC
   `);
-
   return { success: true, data: res.rows };
 };
-
 export const getYears = async () => {
   const res = await pool.query(`
     SELECT DISTINCT year

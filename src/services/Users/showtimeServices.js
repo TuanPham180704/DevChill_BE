@@ -1,4 +1,5 @@
 import pool from "../../config/db.js";
+import cron from "node-cron"; // Nhớ import thư viện cron nhé
 
 export const getPublicShowtimes = async (query = {}) => {
   const limit = Math.min(parseInt(query.limit) || 12, 50);
@@ -89,3 +90,84 @@ export const getShowtimeWatchDetail = async (id) => {
   const res = await pool.query(query, [id]);
   return res.rows[0];
 };
+
+cron.schedule("* * * * *", async () => {
+  try {
+    await pool.query(`
+      UPDATE showtimes 
+      SET status = 'live', updated_at = NOW() 
+      WHERE status = 'scheduled' AND start_time <= NOW() AND end_time > NOW()
+    `);
+    await pool.query(`
+      UPDATE showtimes 
+      SET status = 'ended', updated_at = NOW() 
+      WHERE status IN ('scheduled', 'live') AND end_time <= NOW()
+    `);
+    const lockedRecords = await pool.query(`
+      SELECT DISTINCT s.movie_id, s.episode_id
+      FROM showtimes s
+      JOIN movies m ON s.movie_id = m.id
+      JOIN episodes e ON s.episode_id = e.id
+      WHERE s.status = 'ended'
+        AND (m.lifecycle_status = 'upcoming' OR e.is_published = FALSE)
+    `);
+
+    if (lockedRecords.rowCount > 0) {
+      const episodeIds = [
+        ...new Set(lockedRecords.rows.map((row) => row.episode_id)),
+      ];
+      const movieIds = [
+        ...new Set(lockedRecords.rows.map((row) => row.movie_id)),
+      ];
+      if (episodeIds.length > 0) {
+        await pool.query(
+          `
+          UPDATE episodes SET is_published = TRUE
+          WHERE id = ANY($1) AND is_published = FALSE
+        `,
+          [episodeIds],
+        );
+      }
+      if (movieIds.length > 0) {
+        for (const movieId of movieIds) {
+          const movieInfo = await pool.query(
+            `
+            SELECT lifecycle_status, COALESCE(episode_total, 1) as episode_total 
+            FROM movies 
+            WHERE id = $1
+          `,
+            [movieId],
+          );
+
+          if (movieInfo.rowCount === 0) continue;
+
+          const { lifecycle_status, episode_total } = movieInfo.rows[0];
+          const publishedCountRes = await pool.query(
+            `
+            SELECT COUNT(*) FROM episodes 
+            WHERE movie_id = $1 AND is_published = TRUE
+          `,
+            [movieId],
+          );
+
+          const publishedCount = parseInt(publishedCountRes.rows[0].count);
+          let newStatus = "ongoing";
+          if (publishedCount >= episode_total) {
+            newStatus = "completed";
+          }
+          if (lifecycle_status !== newStatus) {
+            await pool.query(
+              `
+              UPDATE movies SET lifecycle_status = $1, updated_at = NOW()
+              WHERE id = $2
+            `,
+              [newStatus, movieId],
+            );
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[Cron Error]", error);
+  }
+});

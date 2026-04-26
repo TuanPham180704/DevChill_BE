@@ -207,16 +207,31 @@ export const createMovie = async (data) => {
     };
 
     if (data.episodes && Array.isArray(data.episodes)) {
+      const defaultLifecyclePublished =
+        data.lifecycle_status === "upcoming" ? false : true;
+
       for (const ep of data.episodes) {
         if (!ep?.episode_number) continue;
 
         const epSlug = toSlug(ep.name || `tap-${ep.episode_number}`);
+        // Ưu tiên giá trị từ payload truyền lên, nếu không có thì lấy theo lifecycle
+        const initialPublished =
+          ep.is_published !== undefined
+            ? ep.is_published
+            : defaultLifecyclePublished;
 
         const epRes = await client.query(
-          `INSERT INTO episodes(movie_id, season, episode_number, name, slug)
-           VALUES($1,$2,$3,$4,$5)
+          `INSERT INTO episodes(movie_id, season, episode_number, name, slug, is_published)
+           VALUES($1,$2,$3,$4,$5,$6)
            RETURNING id`,
-          [movieId, ep.season || 1, ep.episode_number, ep.name || "", epSlug],
+          [
+            movieId,
+            ep.season || 1,
+            ep.episode_number,
+            ep.name || "",
+            epSlug,
+            initialPublished,
+          ],
         );
 
         const epId = epRes.rows[0].id;
@@ -417,7 +432,7 @@ export const getAll = async (query) => {
   };
 };
 
-export const getById = async (id) => {
+export const getById = async (id, is_public = false) => {
   const movieRes = await pool.query(`SELECT * FROM movies WHERE id=$1`, [id]);
 
   if (!movieRes.rows.length) return null;
@@ -445,6 +460,8 @@ export const getById = async (id) => {
     [id],
   );
 
+  const episodeCondition = is_public ? "AND e.is_published = TRUE" : "";
+
   const episodes = await pool.query(
     `SELECT e.*, 
       COALESCE(
@@ -463,7 +480,7 @@ export const getById = async (id) => {
      FROM episodes e
      LEFT JOIN episode_streams es ON es.episode_id = e.id
      LEFT JOIN servers s ON s.id = es.server_id
-     WHERE e.movie_id=$1
+     WHERE e.movie_id=$1 ${episodeCondition}
      GROUP BY e.id
      ORDER BY e.season, e.episode_number`,
     [id],
@@ -637,18 +654,38 @@ export const updateMedia = async (movieId, data) => {
     };
 
     if (episodes && Array.isArray(episodes)) {
+      const movieCheck = await client.query(
+        `SELECT lifecycle_status FROM movies WHERE id=$1`,
+        [movieId],
+      );
+      const currentLifecycle =
+        movieCheck.rows[0]?.lifecycle_status || "upcoming";
+      const defaultPublished = currentLifecycle === "upcoming" ? false : true;
+
       for (const ep of episodes) {
         if (!ep?.episode_number) continue;
 
         const epSlug = toSlug(ep.name || `tap-${ep.episode_number}`);
+        const epIsPublished =
+          ep.is_published !== undefined ? ep.is_published : defaultPublished;
 
         const epRes = await client.query(
-          `INSERT INTO episodes(movie_id, season, episode_number, name, slug)
-           VALUES($1,$2,$3,$4,$5)
+          `INSERT INTO episodes(movie_id, season, episode_number, name, slug, is_published)
+           VALUES($1,$2,$3,$4,$5,$6)
            ON CONFLICT (movie_id, season, episode_number)
-           DO UPDATE SET name = EXCLUDED.name
+           DO UPDATE SET 
+              name = EXCLUDED.name,
+              slug = EXCLUDED.slug,
+              is_published = EXCLUDED.is_published
            RETURNING id`,
-          [movieId, ep.season || 1, ep.episode_number, ep.name || "", epSlug],
+          [
+            movieId,
+            ep.season || 1,
+            ep.episode_number,
+            ep.name || "",
+            epSlug,
+            epIsPublished,
+          ],
         );
 
         const epId = epRes.rows[0].id;

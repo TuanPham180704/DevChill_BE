@@ -191,6 +191,7 @@ const initTables = async () => {
         episode_number INTEGER,
         name VARCHAR(100),
         slug TEXT,
+        is_published BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(movie_id, season, episode_number)
       );
