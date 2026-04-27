@@ -93,6 +93,7 @@ export const updatePlanService = async (id, data) => {
 export const getAllPlansAdminService = async ({
   page = 1,
   limit = 10,
+  keyword, // Thêm keyword để thanh tìm kiếm ở Frontend hoạt động
   status,
   sort_by,
   order,
@@ -103,11 +104,18 @@ export const getAllPlansAdminService = async ({
   const conditions = [];
   const values = [];
 
+  // Hứng và xử lý keyword từ Frontend truyền lên
+  if (keyword) {
+    values.push(`%${keyword}%`);
+    conditions.push(`name ILIKE $${values.length}`);
+  }
+
   if (status) {
     values.push(status);
     conditions.push(`status = $${values.length}`);
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
   const ALLOWED_SORT_COLUMNS = {
     id: "id",
     name: "name",
@@ -118,7 +126,15 @@ export const getAllPlansAdminService = async ({
   };
   const sortColumn = ALLOWED_SORT_COLUMNS[sort_by] || "created_at";
   const sortDirection = (order || "").toLowerCase() === "asc" ? "ASC" : "DESC";
-  const [dataQuery, countQuery] = await Promise.all([
+  const statsQuery = `
+    SELECT
+      COUNT(*) AS total,
+      COUNT(*) FILTER (WHERE status = 'active') AS active,
+      COUNT(*) FILTER (WHERE status = 'inactive') AS inactive,
+      COUNT(*) FILTER (WHERE is_popular = true) AS popular
+    FROM plans
+  `;
+  const [dataQuery, countQuery, statsRes] = await Promise.all([
     pool.query(
       `
       SELECT * FROM plans
@@ -129,9 +145,12 @@ export const getAllPlansAdminService = async ({
       [...values, safeLimit, offset],
     ),
     pool.query(`SELECT COUNT(*) FROM plans ${where}`, values),
+    pool.query(statsQuery),
   ]);
 
   const totalRecords = parseInt(countQuery.rows[0].count);
+  const statsRow = statsRes.rows[0];
+
   return {
     data: dataQuery.rows,
     pagination: {
@@ -139,6 +158,12 @@ export const getAllPlansAdminService = async ({
       page: safePage,
       limit: safeLimit,
       totalPages: Math.ceil(totalRecords / safeLimit),
+    },
+    stats: {
+      total: parseInt(statsRow.total) || 0,
+      active: parseInt(statsRow.active) || 0,
+      inactive: parseInt(statsRow.inactive) || 0,
+      popular: parseInt(statsRow.popular) || 0,
     },
   };
 };

@@ -73,7 +73,15 @@ export const getAllShowtimes = async (query) => {
     LEFT JOIN episodes e ON s.episode_id = e.id
     ${where}
   `;
-  const [dataRes, countRes] = await Promise.all([
+  const statsQuery = `
+    SELECT
+      COUNT(*) AS total,
+      COUNT(*) FILTER (WHERE status = 'scheduled') AS scheduled,
+      COUNT(*) FILTER (WHERE status = 'live') AS live,
+      COUNT(*) FILTER (WHERE status = 'ended') AS ended
+    FROM showtimes
+  `;
+  const [dataRes, countRes, statsRes] = await Promise.all([
     pool.query(
       `
         SELECT s.*, m.name AS movie_name, m.duration, e.name AS episode_name, e.episode_number
@@ -84,17 +92,24 @@ export const getAllShowtimes = async (query) => {
       [...values, limit, offset],
     ),
     pool.query(`SELECT COUNT(*) AS total ${baseFromJoins}`, values),
+    pool.query(statsQuery),
   ]);
 
   const totalRecords = parseInt(countRes.rows[0].total);
-
+  const statsRow = statsRes.rows[0];
   return {
     data: dataRes.rows,
     pagination: {
       total: totalRecords,
       page,
       limit,
-      totalPages: Math.ceil(totalRecords / limit), 
+      totalPages: Math.ceil(totalRecords / limit),
+    },
+    stats: {
+      total: Number(statsRow.total) || 0,
+      scheduled: Number(statsRow.scheduled) || 0,
+      live: Number(statsRow.live) || 0,
+      ended: Number(statsRow.ended) || 0,
     },
   };
 };

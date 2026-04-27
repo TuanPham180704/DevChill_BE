@@ -346,6 +346,7 @@ export const getAll = async (query) => {
     category,
     country,
     lifecycle_status,
+    is_premium,
     sort_by,
     order,
   } = query;
@@ -379,7 +380,10 @@ export const getAll = async (query) => {
     where.push(`m.year = $${i++}`);
     values.push(year);
   }
-
+  if (is_premium !== undefined && is_premium !== "") {
+    where.push(`m.is_premium = $${i++}`);
+    values.push(is_premium === "true" || is_premium === true);
+  }
   if (category) {
     where.push(`cat.slug = $${i++}`);
     values.push(category);
