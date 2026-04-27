@@ -1,5 +1,6 @@
 import pool from "../../config/db.js";
-import cron from "node-cron"; // Nhớ import thư viện cron nhé
+import cron from "node-cron";
+import { io } from "../../server.js";
 
 export const getPublicShowtimes = async (query = {}) => {
   const limit = Math.min(parseInt(query.limit) || 12, 50);
@@ -9,10 +10,9 @@ export const getPublicShowtimes = async (query = {}) => {
     SELECT 
       s.id, s.start_time, s.end_time, s.status,
       m.name AS movie_name, m.poster_url, m.is_premium AS movie_is_premium,
-      m.content AS description, -- Lấy mô tả phim từ cột content
+      m.content AS description,
       e.name AS episode_name, e.episode_number,
       
-      -- Lấy danh sách diễn viên dưới dạng mảng JSON
       COALESCE(
         (
           SELECT json_agg(
@@ -30,7 +30,7 @@ export const getPublicShowtimes = async (query = {}) => {
     JOIN episodes e ON s.episode_id = e.id
     WHERE s.is_premiere = TRUE 
       AND s.status IN ('scheduled', 'live')
-      AND s.end_time > NOW() -- Safety net chặn phim đã hết giờ thực tế
+      AND s.end_time > NOW()
     ORDER BY s.start_time ASC
     LIMIT $1 OFFSET $2;
   `;
@@ -43,10 +43,9 @@ export const getShowtimeWatchDetail = async (id) => {
     SELECT 
       s.*, 
       m.name AS movie_name, m.poster_url, m.is_premium AS movie_is_premium,
-      m.content AS description, -- Lấy mô tả phim
+      m.content AS description,
       e.name AS episode_name, e.episode_number, e.season,
       
-      -- Lấy danh sách diễn viên dưới dạng mảng JSON
       COALESCE(
         (
           SELECT json_agg(
@@ -59,7 +58,6 @@ export const getShowtimeWatchDetail = async (id) => {
         '[]'::json
       ) AS actors,
       
-      -- BẢO MẬT: Chỉ trả về mảng stream nếu trạng thái đang là LIVE
       CASE 
         WHEN s.status = 'live' THEN 
           COALESCE(
@@ -90,19 +88,38 @@ export const getShowtimeWatchDetail = async (id) => {
   const res = await pool.query(query, [id]);
   return res.rows[0];
 };
-
 cron.schedule("* * * * *", async () => {
   try {
-    await pool.query(`
+    const liveRes = await pool.query(`
       UPDATE showtimes 
       SET status = 'live', updated_at = NOW() 
       WHERE status = 'scheduled' AND start_time <= NOW() AND end_time > NOW()
+      RETURNING id
     `);
-    await pool.query(`
+
+    if (liveRes.rowCount > 0 && io) {
+      liveRes.rows.forEach((row) => {
+        io.to(`room_premiere_${row.id}`).emit("room_status_changed", {
+          roomId: row.id,
+          status: "live",
+        });
+      });
+    }
+    const endedRes = await pool.query(`
       UPDATE showtimes 
       SET status = 'ended', updated_at = NOW() 
       WHERE status IN ('scheduled', 'live') AND end_time <= NOW()
+      RETURNING id
     `);
+
+    if (endedRes.rowCount > 0 && io) {
+      endedRes.rows.forEach((row) => {
+        io.to(`room_premiere_${row.id}`).emit("room_status_changed", {
+          roomId: row.id,
+          status: "ended",
+        });
+      });
+    }
     const lockedRecords = await pool.query(`
       SELECT DISTINCT s.movie_id, s.episode_id
       FROM showtimes s
@@ -119,6 +136,7 @@ cron.schedule("* * * * *", async () => {
       const movieIds = [
         ...new Set(lockedRecords.rows.map((row) => row.movie_id)),
       ];
+
       if (episodeIds.length > 0) {
         await pool.query(
           `
@@ -128,13 +146,13 @@ cron.schedule("* * * * *", async () => {
           [episodeIds],
         );
       }
+
       if (movieIds.length > 0) {
         for (const movieId of movieIds) {
           const movieInfo = await pool.query(
             `
             SELECT lifecycle_status, COALESCE(episode_total, 1) as episode_total 
-            FROM movies 
-            WHERE id = $1
+            FROM movies WHERE id = $1
           `,
             [movieId],
           );
@@ -144,8 +162,7 @@ cron.schedule("* * * * *", async () => {
           const { lifecycle_status, episode_total } = movieInfo.rows[0];
           const publishedCountRes = await pool.query(
             `
-            SELECT COUNT(*) FROM episodes 
-            WHERE movie_id = $1 AND is_published = TRUE
+            SELECT COUNT(*) FROM episodes WHERE movie_id = $1 AND is_published = TRUE
           `,
             [movieId],
           );

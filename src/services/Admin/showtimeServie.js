@@ -1,5 +1,6 @@
 import pool from "../../config/db.js";
 import cron from "node-cron";
+import { io } from "../../server.js";
 
 const getDurationInMinutes = (durationStr) => {
   if (!durationStr) return 120;
@@ -182,8 +183,16 @@ export const updateShowtime = async (id, data) => {
     `UPDATE showtimes SET ${fields.join(", ")}, updated_at = NOW() WHERE id = $${i} RETURNING *`,
     values,
   );
+  if (data.status && data.status !== current.status && io) {
+    io.to(`room_premiere_${id}`).emit("room_status_changed", {
+      roomId: parseInt(id),
+      status: data.status,
+    });
+  }
+
   return res.rows[0];
 };
+
 cron.schedule("* * * * *", async () => {
   try {
     const liveUpdate = await pool.query(`
@@ -195,6 +204,15 @@ cron.schedule("* * * * *", async () => {
       RETURNING id;
     `);
 
+    if (liveUpdate.rowCount > 0 && io) {
+      liveUpdate.rows.forEach((row) => {
+        io.to(`room_premiere_${row.id}`).emit("room_status_changed", {
+          roomId: row.id,
+          status: "live",
+        });
+      });
+    }
+
     const endedUpdate = await pool.query(`
       UPDATE showtimes 
       SET status = 'ended', updated_at = NOW() 
@@ -202,6 +220,15 @@ cron.schedule("* * * * *", async () => {
         AND end_time <= NOW()
       RETURNING id;
     `);
+
+    if (endedUpdate.rowCount > 0 && io) {
+      endedUpdate.rows.forEach((row) => {
+        io.to(`room_premiere_${row.id}`).emit("room_status_changed", {
+          roomId: row.id,
+          status: "ended",
+        });
+      });
+    }
   } catch (error) {
     // console.error("[Cron Error]", error);
   }
