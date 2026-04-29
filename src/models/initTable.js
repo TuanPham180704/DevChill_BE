@@ -49,22 +49,6 @@ const initTables = async () => {
     `);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id BIGSERIAL PRIMARY KEY,
-        entity_type VARCHAR(50),
-        entity_id INTEGER,
-        action VARCHAR(50),
-        performed_by INTEGER REFERENCES users(id),
-        old_data JSONB,
-        new_data JSONB,
-        reason TEXT,
-        ip_address VARCHAR(50),
-        user_agent TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    await pool.query(`
       CREATE TABLE IF NOT EXISTS contracts (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
@@ -213,19 +197,6 @@ const initTables = async () => {
     `);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS messages (
-        id BIGSERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
-        episode_id INTEGER REFERENCES episodes(id),
-        parent_id INTEGER REFERENCES messages(id),
-        content TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP
-      );
-    `);
-
-    await pool.query(`
       CREATE TABLE IF NOT EXISTS watch_history (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -240,14 +211,6 @@ const initTables = async () => {
     `);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS favorites (
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (user_id, movie_id)
-      );
-    `);
-    await pool.query(`
       CREATE TABLE IF NOT EXISTS plans (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100),
@@ -260,6 +223,7 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS subscriptions (
         id SERIAL PRIMARY KEY,
@@ -274,75 +238,49 @@ const initTables = async () => {
     `);
 
     await pool.query(`
-  CREATE TABLE IF NOT EXISTS payments (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
-    plan_id INTEGER REFERENCES plans(id),
-    subscription_id INTEGER REFERENCES subscriptions(id),
-    failure_reason TEXT,
-    amount NUMERIC,
-    payment_method VARCHAR(50) DEFAULT 'vnpay',
-    status VARCHAR(20) DEFAULT 'pending',
-    transaction_code VARCHAR(100),
-    vnp_txn_ref VARCHAR(100) UNIQUE,
-    vnp_transaction_no VARCHAR(100),
-    vnp_response_code VARCHAR(10),
-    vnp_bank_code VARCHAR(20),
-    paid_at TIMESTAMP,
-    raw_response JSONB,
-    verified_by_admin INTEGER REFERENCES users(id),
-    verified_at TIMESTAMP,
-    note TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT payments_status_check 
-      CHECK (status IN ('pending', 'success', 'failed', 'cancelled', 'expired'))
-  );
-`);
+      CREATE TABLE IF NOT EXISTS payments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        plan_id INTEGER REFERENCES plans(id),
+        subscription_id INTEGER REFERENCES subscriptions(id),
+        failure_reason TEXT,
+        amount NUMERIC,
+        payment_method VARCHAR(50) DEFAULT 'vnpay',
+        status VARCHAR(20) DEFAULT 'pending',
+        transaction_code VARCHAR(100),
+        vnp_txn_ref VARCHAR(100) UNIQUE,
+        vnp_transaction_no VARCHAR(100),
+        vnp_response_code VARCHAR(10),
+        vnp_bank_code VARCHAR(20),
+        paid_at TIMESTAMP,
+        raw_response JSONB,
+        verified_by_admin INTEGER REFERENCES users(id),
+        verified_at TIMESTAMP,
+        note TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT payments_status_check 
+          CHECK (status IN ('pending', 'success', 'failed', 'cancelled', 'expired'))
+      );
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS showtimes (
         id SERIAL PRIMARY KEY,
-
         movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
         episode_id INTEGER REFERENCES episodes(id) ON DELETE CASCADE,
-
         start_time TIMESTAMP NOT NULL,
         end_time TIMESTAMP NOT NULL,
-
         status VARCHAR(20) DEFAULT 'scheduled'
           CHECK (status IN ('scheduled', 'live', 'ended', 'cancelled')),
-
         allow_watch BOOLEAN DEFAULT TRUE,
-
         is_premiere BOOLEAN DEFAULT FALSE,
         max_viewers INTEGER,
-
         created_by INTEGER REFERENCES users(id),
-
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS showtime_reminders (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        showtime_id INTEGER REFERENCES showtimes(id) ON DELETE CASCADE,
-        remind_before_minutes INTEGER DEFAULT 5,
-        is_notified BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, showtime_id)
-      );
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS showtime_views (
-        id SERIAL PRIMARY KEY,
-        showtime_id INTEGER REFERENCES showtimes(id) ON DELETE CASCADE,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        left_at TIMESTAMP,
-        UNIQUE(showtime_id, user_id)
-      );
-    `);
+
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_showtime_movie ON showtimes(movie_id);`,
     );
@@ -352,22 +290,11 @@ const initTables = async () => {
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_showtime_time ON showtimes(start_time, end_time);`,
     );
-
     await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_reminder_user ON showtime_reminders(user_id);`,
-    );
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_reminder_showtime ON showtime_reminders(showtime_id);`,
+      `CREATE INDEX IF NOT EXISTS idx_watch_history_user_time ON watch_history(user_id, last_watched_at DESC);`,
     );
 
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_views_showtime ON showtime_views(showtime_id);`,
-    );
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_watch_history_user_time sON watch_history(user_id, last_watched_at DESC);`,
-    );
-
-    console.log(" FINAL DB READY + SHOWTIME SYSTEM 🚀");
+    console.log(" FINAL DB READY + SHOWTIME SYSTEM 🚀 (Removed Unused Tables)");
   } catch (err) {
     console.error(" Error:", err);
   }
