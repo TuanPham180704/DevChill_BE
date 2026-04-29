@@ -363,6 +363,9 @@ const initTables = async () => {
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_views_showtime ON showtime_views(showtime_id);`,
     );
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_watch_history_user_time sON watch_history(user_id, last_watched_at DESC);`,
+    );
 
     console.log(" FINAL DB READY + SHOWTIME SYSTEM 🚀");
   } catch (err) {
