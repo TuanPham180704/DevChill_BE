@@ -280,6 +280,61 @@ const initTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS support_requests (
+        id SERIAL PRIMARY KEY,
+        ticket_code VARCHAR(50) UNIQUE NOT NULL, 
+        
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL, 
+        guest_email VARCHAR(150), 
+        
+        category VARCHAR(50) NOT NULL, 
+        description TEXT NOT NULL,
+        attachments TEXT[], 
+        
+        status VARCHAR(20) DEFAULT 'open' 
+          CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+          
+        priority VARCHAR(20) DEFAULT 'low' 
+          CHECK (priority IN ('low', 'medium', 'high')),
+          
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS support_responses (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER REFERENCES support_requests(id) ON DELETE CASCADE,
+        
+        sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL, 
+        is_admin_reply BOOLEAN DEFAULT FALSE, 
+        
+        content_response TEXT NOT NULL, 
+        attachments TEXT[], 
+        
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await pool.query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    type VARCHAR(50) DEFAULT 'system', -- VD: 'support', 'payment', 'system'
+    is_read BOOLEAN DEFAULT FALSE,
+    reference_id INTEGER, -- Lưu ID của ticket để FE bấm vào chuyển trang
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_support_status_priority ON support_requests(status, priority, created_at DESC);`,
+    );
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_support_ticket_code ON support_requests(ticket_code);`,
+    );
 
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_showtime_movie ON showtimes(movie_id);`,
