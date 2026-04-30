@@ -27,7 +27,6 @@ export const getAllTicketsService = async (filters) => {
     values.push(`%${search}%`);
     query += ` AND (sr.ticket_code ILIKE $${values.length} OR u.username ILIKE $${values.length} OR sr.guest_email ILIKE $${values.length})`;
   }
-
   const ALLOWED_SORT_COLUMNS = {
     id: "sr.id",
     status: "sr.status",
@@ -35,43 +34,62 @@ export const getAllTicketsService = async (filters) => {
     created_at: "sr.created_at",
     ticket_code: "sr.ticket_code",
   };
+
   if (!sort_by) {
     query += ` ORDER BY 
       CASE WHEN sr.status IN ('open', 'in_progress') THEN 1 ELSE 2 END,
       CASE sr.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
-      sr.created_at ASC`;
+      sr.created_at DESC`;
   } else {
     const sortColumn = ALLOWED_SORT_COLUMNS[sort_by] || "sr.created_at";
     const sortDirection =
       (order || "").toLowerCase() === "asc" ? "ASC" : "DESC";
     query += ` ORDER BY ${sortColumn} ${sortDirection} NULLS LAST`;
   }
-  values.push(limit);
-  query += ` LIMIT $${values.length}`;
-  values.push(offset);
-  query += ` OFFSET $${values.length}`;
-
-  const result = await pool.query(query, values);
+  const dataValues = [...values];
+  dataValues.push(limit);
+  query += ` LIMIT $${dataValues.length}`;
+  dataValues.push(offset);
+  query += ` OFFSET $${dataValues.length}`;
+  const result = await pool.query(query, dataValues);
   let countQuery = `
     SELECT COUNT(*) FROM support_requests sr
     LEFT JOIN users u ON u.id = sr.user_id
     WHERE 1=1
   `;
-  const countValues = [];
-  if (status) {
-    countValues.push(status);
-    countQuery += ` AND sr.status = $${countValues.length}`;
-  }
+  if (status) countQuery += ` AND sr.status = '${status}'`; 
+  if (search)
+    countQuery += ` AND (sr.ticket_code ILIKE '%${search}%' OR u.username ILIKE '%${search}%' OR sr.guest_email ILIKE '%${search}%')`;
+
+  const countResult = await pool.query(countQuery);
+  const total = parseInt(countResult.rows[0].count, 10);
+  let statsQuery = `
+    SELECT 
+      COUNT(*) as total,
+      COUNT(*) FILTER (WHERE status = 'open') as unread,
+      COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
+      COUNT(*) FILTER (WHERE status = 'resolved') as resolved,
+      COUNT(*) FILTER (WHERE status = 'closed') as closed
+    FROM support_requests sr
+    LEFT JOIN users u ON u.id = sr.user_id
+    WHERE 1=1
+  `;
   if (search) {
-    countValues.push(`%${search}%`);
-    countQuery += ` AND (sr.ticket_code ILIKE $${countValues.length} OR u.username ILIKE $${countValues.length} OR sr.guest_email ILIKE $${countValues.length})`;
+    statsQuery += ` AND (sr.ticket_code ILIKE '%${search}%' OR u.username ILIKE '%${search}%' OR sr.guest_email ILIKE '%${search}%')`;
   }
 
-  const countResult = await pool.query(countQuery, countValues);
-  const total = parseInt(countResult.rows[0].count, 10);
+  const statsResult = await pool.query(statsQuery);
+  const statsData = statsResult.rows[0];
 
   return {
     tickets: result.rows,
+    stats: {
+      total: parseInt(statsData.total, 10),
+      unread: parseInt(statsData.unread, 10),
+      in_progress: parseInt(statsData.in_progress, 10),
+      resolved: parseInt(statsData.resolved, 10),
+      closed: parseInt(statsData.closed, 10),
+    },
     pagination: {
       total,
       page: parseInt(page),
@@ -173,4 +191,3 @@ export const replyTicketService = async (
     client.release();
   }
 };
-
