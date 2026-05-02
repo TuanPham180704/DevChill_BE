@@ -15,6 +15,7 @@ const buildParams = () => {
     values,
   };
 };
+
 export const getPublicMovies = async (query) => {
   const page = Math.max(parseInt(query.page) || 1, 1);
   const limit = Math.min(parseInt(query.limit) || 10, 50);
@@ -38,6 +39,10 @@ export const getPublicMovies = async (query) => {
     "m.status = 'published'",
   ];
 
+  // BIẾN LƯU TRỮ LOGIC CHẤM ĐIỂM (MATCH SCORE)
+  let scoreSelect = "";
+  let scoreOrder = "ORDER BY m.created_at DESC NULLS LAST"; // Mặc định nếu không có keyword
+
   if (keyword?.trim()) {
     const phrases = keyword
       .trim()
@@ -46,9 +51,14 @@ export const getPublicMovies = async (query) => {
       .filter((p) => p.length > 0);
 
     if (phrases.length > 0) {
-      const phraseConditions = phrases.map((p) => {
-        const k = add(`%${p}%`);
-        return `(
+      const phraseConditions = [];
+      const scoreCases = [];
+
+      phrases.forEach((p) => {
+        const k = add(`%${p}%`); // Tái sử dụng index này cho cả SELECT và WHERE
+
+        // 1. Điều kiện để LỌC: Dính chữ nào là vớt phim đó
+        phraseConditions.push(`(
           m.name ILIKE ${k} OR 
           m.origin_name ILIKE ${k} OR
           m.content ILIKE ${k} OR
@@ -58,9 +68,19 @@ export const getPublicMovies = async (query) => {
             JOIN people p ON p.id = mp.person_id
             WHERE mp.movie_id = m.id AND p.name ILIKE ${k}
           )
-        )`;
+        )`);
+
+        // 2. Điều kiện để TÍNH ĐIỂM: Khớp chữ nào cộng 1 điểm chữ đó
+        scoreCases.push(`(
+          CASE WHEN m.name ILIKE ${k} OR m.origin_name ILIKE ${k} OR m.content ILIKE ${k} THEN 1 ELSE 0 END
+        )`);
       });
+
       where.push(`(${phraseConditions.join(" OR ")})`);
+
+      // Tạo cột match_score và ưu tiên xếp hạng điểm cao nhất lên đầu
+      scoreSelect = `, (${scoreCases.join(" + ")}) AS match_score`;
+      scoreOrder = `ORDER BY match_score DESC, m.created_at DESC NULLS LAST`;
     }
   }
 
@@ -113,11 +133,10 @@ export const getPublicMovies = async (query) => {
     JOIN contracts c ON c.id = m.contract_id
     ${whereSQL}
   `;
-
   const dataQuery = `
-    SELECT m.*
+    SELECT m.* ${scoreSelect}
     ${baseQuery}
-    ORDER BY m.created_at DESC NULLS LAST
+    ${scoreOrder}
     LIMIT ${add(limit)} OFFSET ${add(offset)}
   `;
 
