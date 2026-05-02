@@ -1,7 +1,7 @@
 import { askAI } from "../services/AIServices.js";
 import * as movieService from "../services/moviePublicServices.js";
 import { watchHistoryService } from "../services/Users/watchHistoryServices.js";
-
+import * as planService from "../services/Users/planUserServies.js";
 const extractData = (result) => {
   if (!result) return null;
   if (result.data && result.data.data) return result.data.data;
@@ -441,6 +441,102 @@ export const chatAI = async (req, res) => {
           {
             action: "ask_user",
             message: `Đã xoá toàn bộ lịch sử xem phim của bạn thành công!`,
+          },
+          user,
+        );
+      }
+      case "info_premium": {
+        try {
+          const plansData = await planService.getAllPlansService();
+          const activePlans = plansData.filter((p) => p.status === "active");
+
+          if (activePlans.length === 0) {
+            return sendReply(
+              res,
+              {
+                action: "ask_user",
+                message:
+                  "Hiện tại hệ thống DevChill chưa mở bán gói Premium nào. Bạn chờ thông báo sau nhé!",
+              },
+              user,
+            );
+          }
+
+          let planMsg =
+            "Chào bạn! Hiện tại DevChill đang cung cấp các gói VIP siêu ưu đãi sau:\n";
+          let popularPlan = null;
+
+          activePlans.forEach((p) => {
+            const priceFormat = new Intl.NumberFormat("vi-VN", {
+              style: "currency",
+              currency: "VND",
+            }).format(p.price);
+            planMsg += `⭐ ${p.name}: ${priceFormat}\n`;
+            if (p.is_popular) popularPlan = p;
+          });
+          if (popularPlan) {
+            const priceFormat = new Intl.NumberFormat("vi-VN", {
+              style: "currency",
+              currency: "VND",
+            }).format(popularPlan.price);
+            planMsg += `\n💡 Lời khuyên: Đa số thành viên DevChill đang chọn gói [${popularPlan.name}] với giá chỉ ${priceFormat} nhưng hưởng trọn vẹn đặc quyền: ${popularPlan.description.features.join(", ")}.\n\nBạn có muốn chuyển sang trang Thanh toán để xem chi tiết không?`;
+          } else {
+            planMsg +=
+              "\nBạn có muốn chuyển sang trang Thanh toán để nâng cấp không?";
+          }
+
+          return sendReply(res, { action: "ask_user", message: planMsg }, user);
+        } catch (error) {
+          return sendReply(
+            res,
+            {
+              action: "ask_user",
+              message:
+                "Đang có chút trục trặc khi lấy thông tin gói cước. Bạn thử lại sau nhé!",
+            },
+            user,
+          );
+        }
+      }
+      case "payment_issue_step_1": {
+        return sendReply(
+          res,
+          {
+            action: "ask_user",
+            message:
+              "Rất xin lỗi vì sự bất tiện này! Đôi khi hệ thống cần chút thời gian để đồng bộ. Bạn vui lòng thử tải lại trang (F5) hoặc đăng xuất rồi đăng nhập lại xem tài khoản đã lên VIP chưa nhé. Nếu vẫn chưa được, hãy báo lại cho mình biết!",
+          },
+          user,
+        );
+      }
+      case "payment_issue_step_2": {
+        return sendReply(
+          res,
+          {
+            action: "ask_user",
+            message:
+              "Thật xin lỗi vì lỗi vẫn còn. Trường hợp này mình cần chuyên viên vào kiểm tra giao dịch của bạn. Bạn có muốn chuyển sang trang Hỗ trợ (Support) để nhắn tin trực tiếp với Admin không?",
+          },
+          user,
+        );
+      }
+      case "account_issue": {
+        return sendReply(
+          res,
+          {
+            action: "ask_user",
+            message:
+              "Để thay đổi mật khẩu, bạn vui lòng tự thao tác trong phần 'Thông tin cá nhân' nhé. Tuy nhiên, nếu bạn cần thay đổi địa chỉ Email, để đảm bảo an toàn, bạn phải liên hệ với Admin để được hỗ trợ xác minh. Bạn có muốn mình chuyển bạn sang trang Hỗ trợ để gặp Admin luôn không?",
+          },
+          user,
+        );
+      }
+      case "redirect_support": {
+        return sendReply(
+          res,
+          {
+            action: "redirect_support",
+            message: `Ok bạn! Mình đang chuyển bạn đến trang Hỗ trợ để liên hệ với Admin...`,
           },
           user,
         );

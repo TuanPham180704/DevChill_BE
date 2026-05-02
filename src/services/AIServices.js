@@ -77,6 +77,27 @@ User: "ok", "yes", "có", "đồng ý", "mua luôn"
 14. TỪ CHỐI MUA GÓI PREMIUM (Dựa vào ngữ cảnh Chatbot vừa hỏi)
 User: "không", "thôi", "gợi ý phim khác đi", "không mua"
 {"action": "suggest_from_history", "params": {}}
+
+
+15. HỎI VỀ CÁC GÓI PREMIUM / TƯ VẤN VIP
+User: "web có gói vip nào", "giá mua premium", "tôi muốn nâng cấp tài khoản", "gói nào ngon nhất"
+{"action": "info_premium", "params": {}}
+
+16. BÁO LỖI THANH TOÁN / CHƯA LÊN VIP LẦN 1
+User: "tôi thanh toán vnpay bị lỗi", "chuyển khoản rồi mà chưa lên vip", "lỗi nạp tiền"
+{"action": "payment_issue_step_1", "params": {}}
+
+17. BÁO LỖI THANH TOÁN LẦN 2 (SAU KHI ĐÃ F5 THEO HƯỚNG DẪN MÀ VẪN LỖI)
+User: "tải lại rồi vẫn bị", "vẫn chưa có vip", "vẫn lỗi"
+{"action": "payment_issue_step_2", "params": {}}
+
+18. LIÊN HỆ ADMIN / CẦN SUPPORT CỨNG
+User: "tôi muốn liên hệ admin", "cần support", "tạo vé hỗ trợ", "gặp nhân viên"
+{"action": "redirect_support", "params": {}}
+
+19. VẤN ĐỀ TÀI KHOẢN / ĐỔI MẬT KHẨU / ĐỔI EMAIL
+User: "tôi muốn đổi mật khẩu", "cách đổi email","cách đổi mật khẩu", "quên mật khẩu", "tài khoản bị lỗi"
+{"action": "account_issue", "params": {}}
 =========================================
 `;
 
