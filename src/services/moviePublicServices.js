@@ -39,11 +39,29 @@ export const getPublicMovies = async (query) => {
   ];
 
   if (keyword?.trim()) {
-    const k = add(`%${keyword.trim()}%`);
-    where.push(`(
-      m.name ILIKE ${k} OR 
-      m.origin_name ILIKE ${k}
-    )`);
+    const phrases = keyword
+      .trim()
+      .split("|")
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+
+    if (phrases.length > 0) {
+      const phraseConditions = phrases.map((p) => {
+        const k = add(`%${p}%`);
+        return `(
+          m.name ILIKE ${k} OR 
+          m.origin_name ILIKE ${k} OR
+          m.content ILIKE ${k} OR
+          EXISTS (
+            SELECT 1 
+            FROM movie_people mp 
+            JOIN people p ON p.id = mp.person_id
+            WHERE mp.movie_id = m.id AND p.name ILIKE ${k}
+          )
+        )`;
+      });
+      where.push(`(${phraseConditions.join(" OR ")})`);
+    }
   }
 
   if (lifecycle_status && LIFECYCLE_STATUS.includes(lifecycle_status)) {

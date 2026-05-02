@@ -23,6 +23,7 @@ import showtimesRoutes from "./routes/Users/showtimeRoutes.js";
 import publicMoviesRoutes from "./routes/moviePublicRoutes.js";
 import watchHistoryRoutes from "./routes/Users/watchHistoryRoutes.js";
 import supportRoutes from "./routes/Users/supportRoutes.js";
+import aiRoutes from "./routes/AIRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -50,7 +51,7 @@ app.use("/api/plans", planRoutes);
 app.use("/api/showtimes", showtimesRoutes);
 app.use("/api/history", watchHistoryRoutes);
 app.use("/api/support", supportRoutes);
-
+app.use("/api/ai", aiRoutes);
 app.use("/api/movies", publicMoviesRoutes);
 
 app.get("/", (req, res) => {
