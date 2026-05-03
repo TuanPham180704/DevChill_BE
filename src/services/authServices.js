@@ -174,7 +174,9 @@ export const login = async (email, password) => {
       err.status = 400;
       throw err;
     }
+
     const user = res.rows[0];
+
     if (user.is_locked) {
       const err = new Error(
         `Tài khoản đang bị khóa tới ${user.lock_until ? new Date(user.lock_until).toLocaleString("vi-VN") : "thời gian chưa xác định"}`,
@@ -182,6 +184,7 @@ export const login = async (email, password) => {
       err.status = 403;
       throw err;
     }
+
     if (!user.is_active) {
       const err = new Error("Tài khoản chưa được kích hoạt");
       err.status = 403;
@@ -194,7 +197,7 @@ export const login = async (email, password) => {
       err.status = 400;
       throw err;
     }
-    const token = jwt.sign(
+    const accessToken = jwt.sign(
       {
         id: user.id,
         role: user.role,
@@ -202,10 +205,22 @@ export const login = async (email, password) => {
         username: user.username,
       },
       process.env.JWT_SECRET,
+      { expiresIn: "1h" },
+    );
+    const refreshToken = jwt.sign(
+      { id: user.id },
+      process.env.JWT_REFRESH_SECRET,
       { expiresIn: "7d" },
     );
-
-    return { token, user };
+    await pool.query("UPDATE users SET refresh_token=$1 WHERE id=$2", [
+      refreshToken,
+      user.id,
+    ]);
+    return {
+      token: accessToken,
+      refreshToken,
+      user,
+    };
   } catch (error) {
     throw error;
   }

@@ -29,8 +29,9 @@ const initTables = async () => {
 
         reset_token TEXT,
         reset_token_expires TIMESTAMP,
+        refresh_token TEXT,
         deleted_at TIMESTAMP,
-
+  
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
