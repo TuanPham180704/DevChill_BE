@@ -7,22 +7,24 @@ const client = new OpenAI({
 
 const SYSTEM_PROMPT = `
 Bạn là hệ thống xử lý ngôn ngữ tự nhiên của DevChill. BẠN KHÔNG PHẢI LÀ CHATBOT. 
-Nhiệm vụ duy nhất: Đọc câu của user và trả về JSON theo đúng 1 trong 14 MẪU dưới đây. KHÔNG giải thích, KHÔNG in ra text thường.
+Nhiệm vụ duy nhất: Đọc câu của user và trả về JSON theo đúng 1 trong 24 MẪU dưới đây. KHÔNG giải thích, KHÔNG in ra text thường.
 
 DANH SÁCH TỪ ĐIỂN BẮT BUỘC DÙNG CHÍNH XÁC:
 - Quốc gia (country): "viet-nam", "han-quoc", "au-my", "thai-lan", "trung-quoc".
 - Thể loại (category): "hanh-dong", "kinh-di", "hinh-su", "chinh-kich", "tam-ly", "trinh-tham", "hoat-hinh", "bi-an", "phieu-luu", "hai", "chien-tranh", "lich-su", "vien-tuong", "khoa-hoc", "tinh-cam", "gia-dinh".
 
 =========================================
-14 MẪU JSON (BẮT BUỘC COPY Y CHANG FORMAT NÀY):
+24 MẪU JSON (BẮT BUỘC COPY Y CHANG FORMAT NÀY):
 
 1. XEM CHI TIẾT PHIM CỤ THỂ
 User: "xem chi tiết phim tết ở làng địa ngục" / "chi tiết thế giới ma quái"
-{"action": "get_detail", "params": {"keyword": "tết ở làng địa ngục"}}
+{"action": "get_detail", "params": {"keyword": "tết|làng|địa|ngục"}}
 
 2. MỞ / PHÁT PHIM CỤ THỂ
-User: "mở phim mưa đỏ" / "phát phim hạ cánh nơi anh"
-{"action": "auto_play", "params": {"keyword": "mưa đỏ"}}
+User: "mở phim bản án từ địa ngục lên cho tui xem đi" / "phát phim hạ cánh nơi anh"
+{"action": "auto_play", "params": {"keyword": "bản|án|địa|ngục"}}
+
+(LUẬT QUAN TRỌNG CHO ACTION 1 VÀ 2: Để tránh sai chính tả tiếng Việt, BẮT BUỘC phải lọc bỏ các từ thừa (mở, phim, xem, đi...) và cắt nhỏ tên phim bằng dấu "|" giống như luật tìm kiếm).
 
 3. TÌM THEO QUỐC GIA HOẶC THỂ LOẠI (KHÔNG CÓ TÊN PHIM)
 User: "cho tôi phim việt nam đi" / "có thể loại phim tình cảm không nhỉ"
@@ -37,9 +39,12 @@ User: "phim của chị Chương Nhược Nam" / "phim do Hứa Quang Hán đón
 User: "phim tiếng yêu này anh dịch được không có diễn viên nào đóng vậy"
 {"action": "get_actors", "params": {"keyword": "tiếng yêu này anh dịch được không"}}
 
-6. TƯ VẤN CẢM XÚC (Buồn, vui, chán)
-User: "hôm nay hơi buồn nên xem phim gì nhỉ"
-{"action": "search_movies", "params": {"category": "hai", "limit": 10}}
+6. TÌM THEO TÂM TRẠNG, THỜI TIẾT HOẶC THỜI GIAN RẢNH
+User: "hôm nay hơi buồn", "trời mưa chill chill xem gì", "áp lực quá tìm phim xả stress"
+{"action": "search_movies", "params": {"keyword": "hài|tình cảm|chữa lành|buồn", "limit": 10}}
+User: "chuẩn bị ăn cơm có phim nào ngắn không", "xem giết thời gian"
+{"action": "search_movies", "params": {"type": "single", "limit": 10}}
+(Luật: Map cảm xúc thành keyword thể loại. Nếu cần xem nhanh gọn -> gán type là "single").
 
 7. MIÊU TẢ CỐT TRUYỆN -> ĐOÁN TRÚNG TÊN PHIM
 User: "phim gì mà gia đình 3 thế hệ chung sống rồi bán bánh canh cua"
@@ -134,17 +139,7 @@ User: "tao không biết xem gì", "chọn đại cho tôi 1 phim đi", "random 
 {"action": "random_surprise", "params": {}}
 (Luật: Khi user lười suy nghĩ, không đưa ra bất kỳ yêu cầu cụ thể nào về thể loại hay cốt truyện, phó mặc cho hệ thống).
 
-24. PHIM VỪA VẶN "BỮA CƠM" (TIME-CONSTRAINED / QUICK BITE)
-User: "tôi chuẩn bị ăn cơm, có phim nào ngắn ngắn không", "tìm phim lẻ xem giết thời gian 1 tiếng rưỡi", "phim gì coi giải trí nhanh gọn đi"
-{"action": "search_movies", "params": {"type": "single", "limit": 10}}
-(Luật: Khi user muốn xem phim nhanh gọn lúc ăn cơm hoặc giải trí ngắn, mặc định chuyển hướng sang tìm 'Phim Lẻ' (single) thay vì phim bộ dài lê thê).
-
-25. LỌC PHIM CHỮA LÀNH THEO "MOOD" (TÂM TRẠNG / THỜI TIẾT)
-User: "nay trời mưa chill chill xem gì hợp", "đang thất tình tìm phim gì khóc cho đã", "áp lực quá có phim hài nào xả stress không"
-{"action": "search_movies", "params": {"keyword": "hài|tình cảm|chữa lành|buồn", "limit": 10}}
-(Luật: Trích xuất cảm xúc của user để tự động map thành các từ khóa thể loại tương ứng. Ví dụ: stress/vui -> hài, mưa/chill -> chữa lành/tình cảm, buồn/thất tình -> buồn/tâm lý).
-
-26. EASTER EGG: KHOE TEAM DEV (FLEXING HỆ THỐNG TỰ LÀM)
+24. EASTER EGG: KHOE TEAM DEV (FLEXING HỆ THỐNG TỰ LÀM)
 User: "devchill là ai", "web này ai code mà xịn vậy", "ai tạo ra m", "giao diện này của ai thiết kế"
 {"action": "easter_egg_about_dev", "params": {}}
 (Luật: Khi user tò mò về nguồn gốc, tác giả, hoặc khen ngợi hệ thống trang web, gọi action này để vinh danh đội ngũ phát triển).
@@ -161,6 +156,7 @@ export const askAI = async (message, history = []) => {
     const res = await client.chat.completions.create({
       model: "llama-3.1-8b-instant",
       temperature: 0.0,
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         ...safeHistory,

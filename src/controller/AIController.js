@@ -37,7 +37,6 @@ export const chatAI = async (req, res) => {
   try {
     const { message, history } = req.body;
     const user = req.user;
-
     const ai = await askAI(message, history);
     console.log("=== AI INTENT ===", JSON.stringify(ai, null, 2));
 
@@ -358,7 +357,6 @@ export const chatAI = async (req, res) => {
         if (!cleanParams.keyword || cleanParams.keyword.trim() === "") {
           delete cleanParams.keyword;
         }
-
         const resData = await movieService.getPublicMovies(cleanParams);
         const resultArr = extractData(resData) || [];
 
@@ -396,8 +394,6 @@ export const chatAI = async (req, res) => {
               user,
             );
           }
-
-          // Fallback mặc định nếu không khớp gì cả
           return sendReply(
             res,
             {
@@ -632,7 +628,6 @@ export const chatAI = async (req, res) => {
         );
       }
       case "get_upcoming": {
-        // Lấy params từ AI, ép cứng thêm lifecycle_status: "upcoming"
         let finalLimit = aiParams.limit || 10;
         if (finalLimit < 5) {
           finalLimit = 10;
@@ -643,8 +638,6 @@ export const chatAI = async (req, res) => {
           limit: finalLimit,
           lifecycle_status: "upcoming",
         };
-
-        // Ném xuống Service để truy vấn PostgreSQL
         const resData = await movieService.getPublicMovies(upcomingParams);
         const upcomingMovies = extractData(resData) || [];
 

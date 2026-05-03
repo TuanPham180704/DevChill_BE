@@ -155,7 +155,7 @@ export const getPublicMovies = async (query) => {
   `;
 
   const countQuery = `
-    SELECT COUNT(DISTINCT m.id)
+    SELECT COUNT(m.id)
     ${baseQuery}
   `;
 
