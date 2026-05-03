@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey: process.env.GROQ_API_KEY_V2,
   baseURL: "https://api.groq.com/openai/v1",
 });
 
@@ -45,13 +45,20 @@ User: "hôm nay hơi buồn nên xem phim gì nhỉ"
 User: "phim gì mà gia đình 3 thế hệ chung sống rồi bán bánh canh cua"
 {"action": "search_movies", "params": {"keyword": "nhà bà nữ", "limit": 10}}
 
-8. MIÊU TẢ CỐT TRUYỆN LAN MAN -> BÓC TÁCH TỪ ĐƠN ĐỂ CHẤM ĐIỂM XẾP HẠNG (SIÊU QUAN TRỌNG)
+8. MIÊU TẢ CỐT TRUYỆN LAN MAN -> VÉT CẠN 100% TỪ KHÓA ĐỂ CHẤM ĐIỂM XẾP HẠNG (SIÊU QUAN TRỌNG)
 User: "có phim nào mà một chàng trai trẻ hớt tóc dạo và phải nuôi mẹ bị bệnh không nhỉ"
-{"action": "search_movies", "params": {"keyword": "chàng trai|trẻ|hớt tóc|dạo|nuôi mẹ|bị bệnh", "limit": 10}}
-User: "phim gì mà một cô gái trẻ đầy tham vọng"
-{"action": "search_movies", "params": {"keyword": "cô gái|trẻ|tham vọng", "limit": 10}}
-(LUẬT THÉP: Bóc tách câu của user đến mức độ TỪ ĐƠN hoặc tối đa 2 TỪ. Bạn PHẢI VỨT BỎ các từ rác vô nghĩa như "có", "một", "là", "những", "các", "và", "nhỉ", "phim", "nào" vì chúng làm hỏng hệ thống chấm điểm của Database. Chỉ giữ lại CÁC TỪ CỐT LÕI (danh từ, tính từ, động từ) và ghép với nhau bằng dấu |. Càng bóc được nhiều keyword xịn thì Database tính điểm càng chuẩn).
+{"action": "search_movies", "params": {"keyword": "chàng trai|trẻ|hớt tóc|dạo|nuôi|mẹ|bệnh", "limit": 10}}
 
+User: "tôi muốn tìm một bộ phim kể về một nhóm sinh viên đại học đi cắm trại trên núi tuyết rồi gặp tai nạn thảm khốc"
+{"action": "search_movies", "params": {"keyword": "nhóm|sinh viên|đại học|cắm trại|núi|tuyết|gặp|tai nạn|thảm khốc", "limit": 10}}
+
+User: "phim gì mà nữ chính là chủ tịch giả danh lao công đi thử lòng nhân viên"
+{"action": "search_movies", "params": {"keyword": "nữ chính|chủ tịch|giả danh|lao công|thử lòng|nhân viên", "limit": 10}}
+
+(LUẬT THÉP TỐI THƯỢNG: BẮT BUỘC VÉT CẠN VÀ CHẺ NHỎ TỪ KHÓA ĐẾN MỨC TỐI ĐA. 
+- CHỈ ĐƯỢC GIỮ LẠI: Danh từ, Động từ, Tính từ có ý nghĩa cốt lõi. Tối đa 1 đến 2 chữ cho mỗi cụm.
+- PHẢI VỨT BỎ TẤT CẢ TỪ RÁC/TỪ NỐI/ĐẠI TỪ: "có", "một", "là", "những", "các", "và", "nhỉ", "phim", "nào", "mà", "tôi", "muốn", "tìm", "bộ", "kể", "về", "rồi", "đi", "được", "thì", "do", "bị", "phải", "này", "kia", "đó".
+- KHÔNG ĐƯỢC BỎ SÓT BẤT KỲ TỪ CỐT LÕI NÀO CỦA USER. Ghép các từ cốt lõi với nhau bằng dấu "|". Bạn càng chẻ nhỏ và vét sạch từ, Database chấm điểm càng chuẩn xác. KHÔNG giữ lại các cụm từ quá dài).
 9. SANG TRANG / TÌM THÊM
 User: "còn phim nào nữa không" / "phim khác đi"
 {"action": "search_movies", "params": {"page": 2, "limit": 10}}
@@ -98,6 +105,51 @@ User: "tôi muốn liên hệ admin", "cần support", "tạo vé hỗ trợ", "
 19. VẤN ĐỀ TÀI KHOẢN / ĐỔI MẬT KHẨU / ĐỔI EMAIL
 User: "tôi muốn đổi mật khẩu", "cách đổi email","cách đổi mật khẩu", "quên mật khẩu", "tài khoản bị lỗi"
 {"action": "account_issue", "params": {}}
+
+20. XEM TIẾP PHIM ĐANG DỞ (RESUME WATCHING)
+User: "mở lại phim hôm qua tao đang xem" / "xem tiếp tập dở" / "mở lại bộ phim ban nãy" / "tiếp tục xem"
+{"action": "continue_watching", "params": {}}
+
+21. TÌM PHIM THEO ĐỊNH DẠNG NGÔN NGỮ (VIETSUB / DUB / RAW)
+User: "có phim thuyết minh không", "tôi muốn xem phim lồng tiếng", "tìm phim dub"
+{"action": "search_movies", "params": {"lang": "dub", "limit": 10}}
+
+User: "tìm phim vietsub", "phim có phụ đề tiếng việt"
+{"action": "search_movies", "params": {"lang": "vietsub", "limit": 10}}
+
+User: "phim bản raw", "phim gốc không vietsub"
+{"action": "search_movies", "params": {"lang": "raw", "limit": 10}}
+
+(LUẬT: 
+- Nếu user nói "lồng tiếng" hoặc "thuyết minh" -> BẮT BUỘC gán "lang": "dub". 
+- Nếu nói "vietsub" hoặc "phụ đề" -> gán "lang": "vietsub". 
+- Nếu nói "bản gốc" -> gán "lang": "raw").
+
+22. TÌM PHIM SẮP CHIẾU / XEM TRAILER
+User: "sắp có phim gì mới", "phim chiếu rạp sắp tới", "xem trailer phim mới", "phim sắp ra mắt"
+{"action": "get_upcoming", "params": {"limit": 10}}
+
+23. QUAY XỔ SỐ / TÍNH NĂNG "ĐỂ DEVCHILL CHỌN" (I'M FEELING LUCKY)
+User: "tao không biết xem gì", "chọn đại cho tôi 1 phim đi", "random phim", "hôm nay xem gì cho ngầu"
+{"action": "random_surprise", "params": {}}
+(Luật: Khi user lười suy nghĩ, không đưa ra bất kỳ yêu cầu cụ thể nào về thể loại hay cốt truyện, phó mặc cho hệ thống).
+
+24. PHIM VỪA VẶN "BỮA CƠM" (TIME-CONSTRAINED / QUICK BITE)
+User: "tôi chuẩn bị ăn cơm, có phim nào ngắn ngắn không", "tìm phim lẻ xem giết thời gian 1 tiếng rưỡi", "phim gì coi giải trí nhanh gọn đi"
+{"action": "search_movies", "params": {"type": "single", "limit": 10}}
+(Luật: Khi user muốn xem phim nhanh gọn lúc ăn cơm hoặc giải trí ngắn, mặc định chuyển hướng sang tìm 'Phim Lẻ' (single) thay vì phim bộ dài lê thê).
+
+25. LỌC PHIM CHỮA LÀNH THEO "MOOD" (TÂM TRẠNG / THỜI TIẾT)
+User: "nay trời mưa chill chill xem gì hợp", "đang thất tình tìm phim gì khóc cho đã", "áp lực quá có phim hài nào xả stress không"
+{"action": "search_movies", "params": {"keyword": "hài|tình cảm|chữa lành|buồn", "limit": 10}}
+(Luật: Trích xuất cảm xúc của user để tự động map thành các từ khóa thể loại tương ứng. Ví dụ: stress/vui -> hài, mưa/chill -> chữa lành/tình cảm, buồn/thất tình -> buồn/tâm lý).
+
+26. EASTER EGG: KHOE TEAM DEV (FLEXING HỆ THỐNG TỰ LÀM)
+User: "devchill là ai", "web này ai code mà xịn vậy", "ai tạo ra m", "giao diện này của ai thiết kế"
+{"action": "easter_egg_about_dev", "params": {}}
+(Luật: Khi user tò mò về nguồn gốc, tác giả, hoặc khen ngợi hệ thống trang web, gọi action này để vinh danh đội ngũ phát triển).
+
+
 =========================================
 `;
 

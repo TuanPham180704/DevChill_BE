@@ -29,6 +29,9 @@ export const getPublicMovies = async (query) => {
     country,
     lifecycle_status,
     is_premium,
+    sort,
+    audio_format,
+    lang,
   } = query;
 
   const { add, values } = buildParams();
@@ -38,11 +41,13 @@ export const getPublicMovies = async (query) => {
     "c.status = 'active'",
     "m.status = 'published'",
   ];
-
-  // BIẾN LƯU TRỮ LOGIC CHẤM ĐIỂM (MATCH SCORE)
   let scoreSelect = "";
-  let scoreOrder = "ORDER BY m.created_at DESC NULLS LAST"; // Mặc định nếu không có keyword
-
+  let scoreOrder = "ORDER BY m.created_at DESC NULLS LAST";
+  if (sort === "random") {
+    scoreOrder = "ORDER BY RANDOM()";
+  } else if (sort === "release_date_desc") {
+    scoreOrder = "ORDER BY m.created_at DESC NULLS LAST";
+  }
   if (keyword?.trim()) {
     const phrases = keyword
       .trim()
@@ -55,9 +60,7 @@ export const getPublicMovies = async (query) => {
       const scoreCases = [];
 
       phrases.forEach((p) => {
-        const k = add(`%${p}%`); // Tái sử dụng index này cho cả SELECT và WHERE
-
-        // 1. Điều kiện để LỌC: Dính chữ nào là vớt phim đó
+        const k = add(`%${p}%`);
         phraseConditions.push(`(
           m.name ILIKE ${k} OR 
           m.origin_name ILIKE ${k} OR
@@ -69,19 +72,30 @@ export const getPublicMovies = async (query) => {
             WHERE mp.movie_id = m.id AND p.name ILIKE ${k}
           )
         )`);
-
-        // 2. Điều kiện để TÍNH ĐIỂM: Khớp chữ nào cộng 1 điểm chữ đó
         scoreCases.push(`(
           CASE WHEN m.name ILIKE ${k} OR m.origin_name ILIKE ${k} OR m.content ILIKE ${k} THEN 1 ELSE 0 END
         )`);
       });
 
       where.push(`(${phraseConditions.join(" OR ")})`);
-
-      // Tạo cột match_score và ưu tiên xếp hạng điểm cao nhất lên đầu
       scoreSelect = `, (${scoreCases.join(" + ")}) AS match_score`;
       scoreOrder = `ORDER BY match_score DESC, m.created_at DESC NULLS LAST`;
     }
+  }
+  if (lang) {
+    const langKeyword = add(`%${lang}%`);
+    where.push(`
+      (
+        m.lang ILIKE ${langKeyword} 
+        OR EXISTS (
+          SELECT 1 
+          FROM episodes e
+          JOIN episode_streams es ON es.episode_id = e.id
+          WHERE e.movie_id = m.id 
+          AND es.lang ILIKE ${langKeyword}
+        )
+      )
+    `);
   }
 
   if (lifecycle_status && LIFECYCLE_STATUS.includes(lifecycle_status)) {
@@ -269,7 +283,6 @@ export const getMovieWatch = async (slug, query, user = null) => {
   );
 
   if (!movieRes.rows.length) return null;
-
   const movie = movieRes.rows[0];
   if (movie.is_premium && !user?.is_premium) {
     return {
@@ -278,7 +291,13 @@ export const getMovieWatch = async (slug, query, user = null) => {
       message: "Phim này yêu cầu tài khoản premium để xem",
     };
   }
-
+  if (movie.lifecycle_status === "upcoming") {
+    return {
+      success: false,
+      status: 403,
+      message: "Phim này sắp ra mắt",
+    };
+  }
   const episodeCondition = is_public ? "AND is_published = TRUE" : "";
 
   const episodesRes = await pool.query(

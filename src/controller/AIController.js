@@ -329,7 +329,32 @@ export const chatAI = async (req, res) => {
       case "getPublicMovies": {
         const cleanParams = { ...aiParams };
         cleanParams.limit = cleanParams.limit || 10;
-
+        if (cleanParams.keyword) {
+          let kwArray = cleanParams.keyword
+            .toLowerCase()
+            .split("|")
+            .map((w) => w.trim());
+          const trashWords = [
+            "lồng",
+            "tiếng",
+            "thuyết",
+            "minh",
+            "vietsub",
+            "dub",
+            "raw",
+            "hay",
+            "hot",
+            "mới",
+            "nào",
+            "phim",
+          ];
+          kwArray = kwArray.filter((w) => !trashWords.includes(w));
+          if (kwArray.length === 0) {
+            delete cleanParams.keyword;
+          } else {
+            cleanParams.keyword = kwArray.join("|");
+          }
+        }
         if (!cleanParams.keyword || cleanParams.keyword.trim() === "") {
           delete cleanParams.keyword;
         }
@@ -360,6 +385,28 @@ export const chatAI = async (req, res) => {
               user,
             );
           }
+          if (cleanParams.lang) {
+            return sendReply(
+              res,
+              {
+                action: "ask_user",
+                message:
+                  "Hiện tại DevChill chưa cập nhật phim có định dạng ngôn ngữ này. Bạn thử xem định dạng khác nhé!",
+              },
+              user,
+            );
+          }
+
+          // Fallback mặc định nếu không khớp gì cả
+          return sendReply(
+            res,
+            {
+              action: "ask_user",
+              message:
+                "Mình không tìm thấy bộ phim nào khớp với yêu cầu của bạn. Bạn thử gợi ý khác xem sao!",
+            },
+            user,
+          );
         }
         return res.json(resultArr);
       }
@@ -537,6 +584,128 @@ export const chatAI = async (req, res) => {
           {
             action: "redirect_support",
             message: `Ok bạn! Mình đang chuyển bạn đến trang Hỗ trợ để liên hệ với Admin...`,
+          },
+          user,
+        );
+      }
+      case "continue_watching": {
+        if (!user || !user.id) {
+          return sendReply(
+            res,
+            {
+              action: "ask_user",
+              message:
+                "Bạn cần đăng nhập để mình biết bạn đang xem dở phim gì nhé! 🍿",
+            },
+            user,
+          );
+        }
+        const historyResult = await watchHistoryService.getUserHistory(
+          user.id,
+          1,
+          0,
+        );
+        const historyData = extractData(historyResult) || [];
+
+        if (historyData.length === 0) {
+          return sendReply(
+            res,
+            {
+              action: "ask_user",
+              message:
+                "Mình kiểm tra thì chưa thấy bạn xem dở bộ phim nào cả. Cùng chọn một siêu phẩm mới nhé!",
+            },
+            user,
+          );
+        }
+
+        const lastWatched = historyData[0];
+
+        return sendReply(
+          res,
+          {
+            action: "redirect_play",
+            slug: lastWatched.movie_slug,
+            message: `Mình đang mở lại "${lastWatched.movie_name}" cho bạn xem tiếp nhé!`,
+          },
+          user,
+        );
+      }
+      case "get_upcoming": {
+        // Lấy params từ AI, ép cứng thêm lifecycle_status: "upcoming"
+        let finalLimit = aiParams.limit || 10;
+        if (finalLimit < 5) {
+          finalLimit = 10;
+        }
+
+        const upcomingParams = {
+          ...aiParams,
+          limit: finalLimit,
+          lifecycle_status: "upcoming",
+        };
+
+        // Ném xuống Service để truy vấn PostgreSQL
+        const resData = await movieService.getPublicMovies(upcomingParams);
+        const upcomingMovies = extractData(resData) || [];
+
+        if (upcomingMovies.length === 0) {
+          return sendReply(
+            res,
+            {
+              action: "ask_user",
+              message:
+                "Hiện tại hệ thống chưa cập nhật bộ phim sắp chiếu nào. Bạn xem tạm các siêu phẩm đang hot nhé!",
+            },
+            user,
+          );
+        }
+
+        return sendReply(
+          res,
+          {
+            action: "suggest_movies",
+            message:
+              "Đây là danh sách các siêu phẩm sắp đổ bộ trên DevChill, bạn hóng thử nhé:",
+            payload: upcomingMovies,
+          },
+          user,
+        );
+      }
+      case "random_surprise": {
+        const resData = await movieService.getPublicMovies({ limit: 30 });
+        const moviesArr = extractData(resData) || [];
+
+        if (moviesArr.length === 0) {
+          return sendReply(
+            res,
+            {
+              action: "ask_user",
+              message: "Kho phim đang bảo trì nhẹ, bạn quay lại sau nhé!",
+            },
+            user,
+          );
+        }
+        const randomIndex = Math.floor(Math.random() * moviesArr.length);
+        const luckyMovie = moviesArr[randomIndex];
+
+        return sendReply(
+          res,
+          {
+            action: "random_surprise",
+            message:
+              "DevChill đã dùng nhân phẩm quay cho bạn siêu phẩm này! Nhấn Phát để xem ngay nào 🍿",
+            payload: [luckyMovie],
+          },
+          user,
+        );
+      }
+      case "easter_egg_about_dev": {
+        return sendReply(
+          res,
+          {
+            action: "ask_user",
+            message:
+              "Hehe ngại quá! Hệ thống siêu cấp VIP Pro này được thiết kế và phát triển bởi đội ngũ DevChill cực kỳ tâm huyết đó. Từ giao diện mang hơi hướng Glassmorphism sang xịn, đến backend mạnh mẽ... tất cả để mang lại trải nghiệm xem phim mượt mà nhất cho bạn! 💻✨",
           },
           user,
         );
