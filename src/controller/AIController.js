@@ -37,39 +37,81 @@ export const chatAI = async (req, res) => {
   try {
     const { message, history } = req.body;
     const user = req.user;
-    // --- BẮT ĐẦU: ĐÁNH CHẶN LOGIC ĐIỀU HƯỚNG DỰA THEO NGỮ CẢNH ---
     if (history && Array.isArray(history) && history.length > 0) {
       const lastMsg = history[history.length - 1];
 
       if (lastMsg.role === "assistant") {
         const botText = lastMsg.content.toLowerCase();
-        const lowerMsg = message.toLowerCase().trim();
+        const cleanMsg = message
+          .toLowerCase()
+          .replace(/[.,!?;:\-]/g, "")
+          .trim();
         const acceptWords = [
           "ok",
-          "có",
+          "oke",
+          "oki",
+          "okla",
+          "okela",
           "yes",
+          "có",
           "đồng ý",
+          "mua",
           "mua luôn",
           "được",
+          "đc",
+          "chuyển",
           "chuyển đi",
-          "oke",
-          "okla",
           "triển",
           "cần",
           "ừ",
+          "um",
+          "uhm",
+          "uk",
+          "ukm",
+          "chơi",
+          "chốt",
+          "duyệt",
+          "tiến hành",
         ];
-        // Kiểm tra xem câu trả lời của user có chứa từ đồng ý không
-        const isAccept = acceptWords.some(
-          (w) => lowerMsg === w || lowerMsg.startsWith(w),
+        const rejectWords = [
+          "không",
+          "ko",
+          "khum",
+          "hong",
+          "k",
+          "no",
+          "thôi",
+          "thui",
+          "khỏi",
+          "không cần",
+          "từ chối",
+          "hủy",
+          "dẹp",
+          "đéo",
+          "chưa",
+          "không mua",
+        ];
+        const prefixRegex = "(dạ |vâng |thế |vậy |ừ thì |ờ thì )?";
+        const acceptSuffixRegex = "( nhé| nha| đi| luôn| ạ| bạn| rùi| rồi)?";
+        const rejectSuffixRegex = "( cần| đâu| nha| nhé| ạ| bạn| nữa)?";
+
+        const acceptRegex = new RegExp(
+          `^${prefixRegex}(${acceptWords.join("|")})${acceptSuffixRegex}$`,
+          "i",
+        );
+        const rejectRegex = new RegExp(
+          `^${prefixRegex}(${rejectWords.join("|")})${rejectSuffixRegex}$`,
+          "i",
         );
 
-        // 1. CASE: CHUYỂN TRANG PREMIUM (/premium)
+        const isAccept = acceptRegex.test(cleanMsg);
+        const isReject = rejectRegex.test(cleanMsg);
         if (
-          botText.includes("nâng cấp premium") ||
-          botText.includes("trang thanh toán")
+          botText.includes("premium") ||
+          botText.includes("thanh toán") ||
+          botText.includes("nâng cấp")
         ) {
           if (isAccept) {
-            // CẦN RETURN Ở ĐÂY ĐỂ NGĂN VIỆC CHẠY TIẾP XUỐNG DƯỚI
             return sendReply(
               res,
               {
@@ -80,11 +122,12 @@ export const chatAI = async (req, res) => {
             );
           }
         }
-
-        // 2. CASE: CHUYỂN TRANG HỖ TRỢ / ADMIN (/profile/support)
-        if (botText.includes("trang hỗ trợ") || botText.includes("gặp admin")) {
+        if (
+          botText.includes("hỗ trợ") ||
+          botText.includes("admin") ||
+          botText.includes("chuyên viên")
+        ) {
           if (isAccept) {
-            // CẦN RETURN Ở ĐÂY ĐỂ NGĂN VIỆC CHẠY TIẾP XUỐNG DƯỚI
             return sendReply(
               res,
               {
@@ -95,19 +138,13 @@ export const chatAI = async (req, res) => {
             );
           }
         }
-
-        const rejectWords = ["không", "thôi", "từ chối", "hủy", "không cần"];
-        const isReject = rejectWords.some(
-          (w) => lowerMsg === w || lowerMsg.startsWith(w),
-        );
-
         if (
-          (botText.includes("nâng cấp premium") ||
-            botText.includes("trang thanh toán") ||
-            botText.includes("trang hỗ trợ")) &&
+          (botText.includes("premium") ||
+            botText.includes("thanh toán") ||
+            botText.includes("hỗ trợ") ||
+            botText.includes("admin")) &&
           isReject
         ) {
-          // CẦN RETURN Ở ĐÂY ĐỂ NGĂN VIỆC CHẠY TIẾP XUỐNG DƯỚI
           return sendReply(
             res,
             {
@@ -119,7 +156,7 @@ export const chatAI = async (req, res) => {
         }
       }
     }
-    // --- KẾT THÚC ĐÁNH CHẶN ---
+  
     const ai = await askAI(message, history);
     console.log("=== AI INTENT ===", JSON.stringify(ai, null, 2));
 

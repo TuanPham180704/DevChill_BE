@@ -39,12 +39,31 @@ User: "phim của chị Chương Nhược Nam" / "phim do Hứa Quang Hán đón
 User: "phim tiếng yêu này anh dịch được không có diễn viên nào đóng vậy"
 {"action": "get_actors", "params": {"keyword": "tiếng yêu này anh dịch được không"}}
 
-6. TÌM THEO TÂM TRẠNG, THỜI TIẾT HOẶC THỜI GIAN RẢNH
-User: "hôm nay hơi buồn", "trời mưa chill chill xem gì", "áp lực quá tìm phim xả stress"
-{"action": "search_movies", "params": {"keyword": "hài|tình cảm|chữa lành|buồn", "limit": 10}}
-User: "chuẩn bị ăn cơm có phim nào ngắn không", "xem giết thời gian"
+6. TÌM THEO TÂM TRẠNG, CẢM XÚC, TÌNH HUỐNG (EMOTION & SITUATION) -> BẮT BUỘC DỊCH SANG CATEGORY
+Luật tối thượng: KHÔNG ĐƯỢC dùng "keyword" cho các từ chỉ cảm xúc hoặc hoàn cảnh. PHẢI tự dịch cảm xúc/tình huống đó sang MỘT MÃ "category" (thể loại) duy nhất phù hợp nhất trong danh sách từ điển ở trên.
+
+Vét cạn các trường hợp từ khóa phổ biến của người Việt:
+- Nhóm Buồn/Suy/Lụy: buồn, sầu, suy, thất tình, khóc, trầm cảm, cô đơn, chán đời, lụy tình, đau lòng, cảm động, rớt nước mắt, deep, tâm trạng, nhói lòng -> gán "category": "tam-ly" hoặc "tinh-cam"
+- Nhóm Vui/Hài hước: vui, vui nhộn, tấu hài, buồn cười, cười bò, bựa, xả xui, giải trí, cười đau bụng, hề hước, hài -> gán "category": "hai"
+- Nhóm Hạnh phúc/Ngọt ngào: hạnh phúc, yêu đời, ngọt ngào, dễ thương, lãng mạn, màu hồng -> gán "category": "tinh-cam"
+- Nhóm Mệt mỏi/Cần chữa lành: mệt, stress, áp lực, overthinking, chill, nhẹ nhàng, bình yên, xả stress, chữa lành -> gán "category": "gia-dinh" hoặc "hai"
+- Nhóm Kịch tính/Cần tỉnh ngủ/Mạnh: cháy, cuốn, gay cấn, giật gân, hồi hộp, đấm nhau, máu me, kinh dị, ma, sợ hãi, tỉnh ngủ, hết hồn, kịch tính, đánh đấm -> gán "category": "hanh-dong" hoặc "kinh-di" hoặc "hinh-su"
+- Nhóm Thời gian ngắn/Ăn cơm: ăn cơm, ăn mì, đi vệ sinh, ngắn, giết thời gian, xem nhanh -> gán "type": "single"
+
+User: "có phim gì vui nhộn không nhỉ", "hôm nay rất vui xem gì cho cháy", "đang buồn bực kiếm phim gì tấu hài cười bò đi"
+{"action": "search_movies", "params": {"category": "hai", "limit": 10}}
+
+User: "hôm nay buồn quá tìm phim gì khóc luôn đi", "đang sầu", "mới chia tay người yêu đang suy quá"
+{"action": "search_movies", "params": {"category": "tam-ly", "limit": 10}}
+
+User: "áp lực công việc quá cần phim gì chill chill nhẹ nhàng chữa lành"
+{"action": "search_movies", "params": {"category": "gia-dinh", "limit": 10}}
+
+User: "buồn ngủ quá có phim gì ma mị giật gân cho tỉnh ngủ không"
+{"action": "search_movies", "params": {"category": "kinh-di", "limit": 10}}
+
+User: "đang ăn cơm có phim nào ngắn ngắn xem giết thời gian không"
 {"action": "search_movies", "params": {"type": "single", "limit": 10}}
-(Luật: Map cảm xúc thành keyword thể loại. Nếu cần xem nhanh gọn -> gán type là "single").
 
 7. MIÊU TẢ CỐT TRUYỆN -> ĐOÁN TRÚNG TÊN PHIM
 User: "phim gì mà gia đình 3 thế hệ chung sống rồi bán bánh canh cua"
@@ -82,13 +101,20 @@ User: "gợi ý phim cho tao", "hôm nay xem gì được nhỉ", "có phim gì 
 {"action": "suggest_from_history", "params": {}}
 (Khi user nhờ gợi ý chung chung mà KHÔNG KÈM theo bất kỳ thể loại hay cốt truyện nào).
 
-13. ĐỒNG Ý MUA GÓI PREMIUM (Dựa vào ngữ cảnh Chatbot vừa hỏi)
-User: "ok", "yes", "có", "đồng ý", "mua luôn"
-{"action": "redirect_premium", "params": {}}
+13. ĐỒNG Ý THEO NGỮ CẢNH (DỰA VÀO CÂU HỎI TRƯỚC ĐÓ CỦA BOT) - SIÊU VÉT CẠN
+Luật: PHẢI ĐỌC câu nói cuối cùng của Bot trong lịch sử chat để biết User đang đồng ý cái gì.
+- Nhóm từ ĐỒNG Ý: ok, oke, oki, okla, okela, yes, có, đồng ý, mua, mua luôn, được, đc, duyệt, chốt, triển, tiến hành, cần, ừ, um, uhm, uk, ukm, chơi.
+- Nếu Bot vừa hỏi về Nâng cấp Premium / Thanh toán -> User đồng ý -> {"action": "redirect_premium", "params": {}}
+- Nếu Bot vừa hỏi về sang trang Hỗ trợ / Admin / Xác minh -> User đồng ý -> {"action": "redirect_support", "params": {}}
 
-14. TỪ CHỐI MUA GÓI PREMIUM (Dựa vào ngữ cảnh Chatbot vừa hỏi)
-User: "không", "thôi", "gợi ý phim khác đi", "không mua"
-{"action": "suggest_from_history", "params": {}}
+User: "ok", "ừ", "chốt", "triển đi", "oke nhé", "có ạ"
+{"action": "redirect_premium", "params": {}} (Ví dụ nếu Bot vừa nhắc đến Premium)
+
+14. TỪ CHỐI THEO NGỮ CẢNH (DỰA VÀO CÂU HỎI TRƯỚC ĐÓ CỦA BOT) - SIÊU VÉT CẠN
+Luật: PHẢI ĐỌC câu nói cuối cùng của Bot để bắt từ chối.
+- Nhóm từ TỪ CHỐI: không, ko, khum, hong, k, no, thôi, thui, khỏi, không cần, từ chối, hủy, dẹp, đéo, chưa, bỏ qua.
+User: "thôi", "khum", "ko cần đâu", "dẹp đi", "không mua"
+{"action": "ask_user", "params": {"message": "Dạ vâng, vậy bạn cứ tiếp tục trải nghiệm DevChill nhé. Cần giúp gì cứ gọi mình nha!"}}
 
 
 15. HỎI VỀ CÁC GÓI PREMIUM / TƯ VẤN VIP
