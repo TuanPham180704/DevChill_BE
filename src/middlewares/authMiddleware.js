@@ -44,10 +44,13 @@ export async function authenticate(req, res, next) {
     next();
   } catch (error) {
     console.error(error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Token hết hạn" });
+    }
     return res.status(403).json({ message: "Token không hợp lệ" });
   }
 }
-export function authenticateOptional  (req, res, next) {
+export function authenticateOptional(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return next();
   try {
@@ -56,7 +59,7 @@ export function authenticateOptional  (req, res, next) {
   } catch (err) {
     next();
   }
-};
+}
 
 export function authorization(role = []) {
   return (req, res, next) => {

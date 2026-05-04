@@ -205,7 +205,7 @@ export const login = async (email, password) => {
         username: user.username,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" },
+      { expiresIn: "15m" },
     );
     const refreshToken = jwt.sign(
       { id: user.id },
@@ -217,7 +217,7 @@ export const login = async (email, password) => {
       user.id,
     ]);
     return {
-      token: accessToken,
+      accessToken: accessToken,
       refreshToken,
       user,
     };
@@ -225,7 +225,36 @@ export const login = async (email, password) => {
     throw error;
   }
 };
+export const refreshTokenService = async (refreshToken) => {
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
+    const res = await pool.query("SELECT * FROM users WHERE id=$1", [
+      decoded.id,
+    ]);
+
+    const user = res.rows[0];
+
+    if (!user || user.refresh_token !== refreshToken) {
+      throw new Error("Refresh token không hợp lệ");
+    }
+
+    const newAccessToken = jwt.sign(
+      {
+        id: user.id,
+        role: user.role,
+        is_premium: user.is_premium,
+        username: user.username,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" },
+    );
+
+    return { accessToken: newAccessToken };
+  } catch (err) {
+    throw err;
+  }
+};
 export const forgotPassword = async (email) => {
   try {
     const res = await pool.query(

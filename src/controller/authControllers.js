@@ -44,7 +44,19 @@ export const login = async (req, res) => {
     res.status(err.status || 500).json({ message: err.message });
   }
 };
+export const refreshToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
 
+    const data = await authService.refreshTokenService(refreshToken);
+
+    res.json(data);
+  } catch (err) {
+    res
+      .status(403)
+      .json({ message: "Refresh token hết hạn hoặc không hợp lệ" });
+  }
+};
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;

@@ -37,6 +37,89 @@ export const chatAI = async (req, res) => {
   try {
     const { message, history } = req.body;
     const user = req.user;
+    // --- BẮT ĐẦU: ĐÁNH CHẶN LOGIC ĐIỀU HƯỚNG DỰA THEO NGỮ CẢNH ---
+    if (history && Array.isArray(history) && history.length > 0) {
+      const lastMsg = history[history.length - 1];
+
+      if (lastMsg.role === "assistant") {
+        const botText = lastMsg.content.toLowerCase();
+        const lowerMsg = message.toLowerCase().trim();
+        const acceptWords = [
+          "ok",
+          "có",
+          "yes",
+          "đồng ý",
+          "mua luôn",
+          "được",
+          "chuyển đi",
+          "oke",
+          "okla",
+          "triển",
+          "cần",
+          "ừ",
+        ];
+        // Kiểm tra xem câu trả lời của user có chứa từ đồng ý không
+        const isAccept = acceptWords.some(
+          (w) => lowerMsg === w || lowerMsg.startsWith(w),
+        );
+
+        // 1. CASE: CHUYỂN TRANG PREMIUM (/premium)
+        if (
+          botText.includes("nâng cấp premium") ||
+          botText.includes("trang thanh toán")
+        ) {
+          if (isAccept) {
+            // CẦN RETURN Ở ĐÂY ĐỂ NGĂN VIỆC CHẠY TIẾP XUỐNG DƯỚI
+            return sendReply(
+              res,
+              {
+                action: "redirect_premium",
+                message: `Ok bạn! Mình đang chuyển hướng bạn đến trang mua gói Premium nhé...`,
+              },
+              user,
+            );
+          }
+        }
+
+        // 2. CASE: CHUYỂN TRANG HỖ TRỢ / ADMIN (/profile/support)
+        if (botText.includes("trang hỗ trợ") || botText.includes("gặp admin")) {
+          if (isAccept) {
+            // CẦN RETURN Ở ĐÂY ĐỂ NGĂN VIỆC CHẠY TIẾP XUỐNG DƯỚI
+            return sendReply(
+              res,
+              {
+                action: "redirect_support",
+                message: `Ok bạn! Mình đang chuyển bạn đến trang Hỗ trợ để liên hệ trực tiếp với Admin...`,
+              },
+              user,
+            );
+          }
+        }
+
+        const rejectWords = ["không", "thôi", "từ chối", "hủy", "không cần"];
+        const isReject = rejectWords.some(
+          (w) => lowerMsg === w || lowerMsg.startsWith(w),
+        );
+
+        if (
+          (botText.includes("nâng cấp premium") ||
+            botText.includes("trang thanh toán") ||
+            botText.includes("trang hỗ trợ")) &&
+          isReject
+        ) {
+          // CẦN RETURN Ở ĐÂY ĐỂ NGĂN VIỆC CHẠY TIẾP XUỐNG DƯỚI
+          return sendReply(
+            res,
+            {
+              action: "ask_user",
+              message: `Dạ vâng, vậy bạn cứ tiếp tục trải nghiệm DevChill nhé. Cần giúp gì cứ gọi mình nha!`,
+            },
+            user,
+          );
+        }
+      }
+    }
+    // --- KẾT THÚC ĐÁNH CHẶN ---
     const ai = await askAI(message, history);
     console.log("=== AI INTENT ===", JSON.stringify(ai, null, 2));
 

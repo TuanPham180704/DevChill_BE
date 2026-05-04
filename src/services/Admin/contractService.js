@@ -36,7 +36,7 @@ export async function getContracts({
   status,
   start_date,
   end_date,
-  sort_by, 
+  sort_by,
   order,
   page = 1,
   limit = 10,
@@ -214,9 +214,7 @@ export async function autoExpireContracts() {
     await pool.query(
       `UPDATE movies 
        SET status='hidden' 
-       WHERE id IN (
-         SELECT movie_id FROM contract_movies WHERE contract_id=$1
-       )`,
+       WHERE contract_id=$1`,
       [contract.id],
     );
   }
