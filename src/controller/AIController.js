@@ -156,7 +156,7 @@ export const chatAI = async (req, res) => {
         }
       }
     }
-  
+
     const ai = await askAI(message, history);
     console.log("=== AI INTENT ===", JSON.stringify(ai, null, 2));
 
@@ -448,6 +448,8 @@ export const chatAI = async (req, res) => {
       case "getPublicMovies": {
         const cleanParams = { ...aiParams };
         cleanParams.limit = cleanParams.limit || 10;
+
+        // 1. DỌN DẸP TỪ KHÓA
         if (cleanParams.keyword) {
           let kwArray = cleanParams.keyword
             .toLowerCase()
@@ -477,9 +479,12 @@ export const chatAI = async (req, res) => {
         if (!cleanParams.keyword || cleanParams.keyword.trim() === "") {
           delete cleanParams.keyword;
         }
+
+        // 2. QUERY DATABASE
         const resData = await movieService.getPublicMovies(cleanParams);
         const resultArr = extractData(resData) || [];
 
+        // 3. XỬ LÝ TRƯỜNG HỢP KHÔNG TÌM THẤY PHIM
         if (resultArr.length === 0) {
           if (cleanParams.keyword) {
             const kwDisplay = cleanParams.keyword.replace(/\|/g, ", ");
@@ -524,7 +529,58 @@ export const chatAI = async (req, res) => {
             user,
           );
         }
-        return res.json(resultArr);
+        let replyMsg = "DevChill tìm thấy các kết quả này cho bạn:";
+        if (cleanParams.category === "hai") {
+          replyMsg =
+            "Đang vui lại càng thêm vui! Triển ngay mấy bộ tấu hài cực bựa này cho rộn ràng nhé! 😂";
+        } else if (cleanParams.category === "tinh-cam") {
+          replyMsg =
+            "Tâm trạng đang vui vẻ phơi phới đúng không? Thêm chút ngọt ngào lãng mạn với list siêu phẩm này nhé! 💕";
+        } else if (cleanParams.category === "tam-ly") {
+          replyMsg =
+            "Có những ngày tâm trạng hơi chùng xuống... Để DevChill vỗ về bạn bằng mấy bộ phim sâu lắng này nha 🥺";
+        } else if (cleanParams.category === "gia-dinh") {
+          replyMsg =
+            "Cần một chút bình yên chữa lành? Mấy bộ phim gia đình nhẹ nhàng này là chuẩn bài luôn! 🏡";
+        } else if (cleanParams.category === "kinh-di") {
+          replyMsg =
+            "Chuẩn bị tinh thần tỉnh ngủ chưa? Đóng cửa tắt đèn cày mấy bộ rùng rợn này nhé! 👻";
+        } else if (
+          cleanParams.category === "hanh-dong" ||
+          cleanParams.category === "hinh-su"
+        ) {
+          replyMsg =
+            "Thích cảm giác mạnh à? List phim hành động cháy nổ đùng đùng này sinh ra để dành cho bạn! 🔥";
+        } else if (cleanParams.category === "hoat-hinh") {
+          replyMsg =
+            "Xin vé đi tuổi thơ hay tìm phim cho bé nhà mình xem? List hoạt hình siêu dễ thương này là chân ái luôn nha! 🧸✨";
+        } else if (cleanParams.country === "viet-nam") {
+          replyMsg =
+            "Người Việt ủng hộ phim Việt nào! Điểm danh ngay những siêu phẩm điện ảnh và truyền hình hot nhất nước mình nhé 🇻🇳🍿";
+        } else if (cleanParams.country === "han-quoc") {
+          replyMsg =
+            "Mê phim Hàn thì bơi hết vào đây! Toàn siêu phẩm oppa cực phẩm thôi nhé 🇰🇷";
+        } else if (cleanParams.country === "trung-quoc") {
+          replyMsg =
+            "Các tỷ tỷ và ca ca Hoa Ngữ đang chờ bạn cày view trong list phim hot này nè 🇨🇳";
+        } else if (cleanParams.country === "au-my") {
+          replyMsg =
+            "Chuẩn gu Âu Mỹ Hollywood rồi, đổi gió với list phim đỉnh cao này nha 🎬";
+        } else if (cleanParams.keyword) {
+          const kwDisplay = cleanParams.keyword.replace(/\|/g, " ");
+          replyMsg = `Mình đã lục tung kho và nhặt ra các phim sát với cốt truyện "${kwDisplay}" nhất, bạn ưng bộ nào không?`;
+        } else if (cleanParams.year) {
+          replyMsg = `Hàng nóng hổi đây! Danh sách các phim nổi bật của năm ${cleanParams.year} cho bạn nè:`;
+        }
+        return sendReply(
+          res,
+          {
+            action: "suggest_movies",
+            message: replyMsg,
+            payload: resultArr,
+          },
+          user,
+        );
       }
 
       case "getPublicMovieById": {
