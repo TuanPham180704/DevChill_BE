@@ -2,6 +2,7 @@ import { askAI } from "../services/AIServices.js";
 import * as movieService from "../services/moviePublicServices.js";
 import { watchHistoryService } from "../services/Users/watchHistoryServices.js";
 import * as planService from "../services/Users/planUserServies.js";
+
 const extractData = (result) => {
   if (!result) return null;
   if (result.data && result.data.data) return result.data.data;
@@ -9,10 +10,34 @@ const extractData = (result) => {
   return result;
 };
 
+// Hàm chuẩn hóa tiếng Việt: bỏ dấu, đưa về in thường để so sánh tuyệt đối
+const normalizeVi = (str) => {
+  if (!str) return "";
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9\s]/g, "")
+    .trim();
+};
+
 const personalizeText = (text, user) => {
-  if (!text || !user || (!user.name && !user.username)) return text;
+  if (!text) return text;
+  let cleanText = text
+    .replace(/giửp/g, "giúp")
+    .replace(/họ7m/g, "hôm")
+    .replace(/đưưùc/g, "được")
+    .replace(/kô\b/gi, "không");
+  if (
+    cleanText.includes("có thể") &&
+    (cleanText.includes("hôm") || cleanText.includes("nay"))
+  ) {
+    cleanText = "Chào bạn! DevChill có thể giúp gì cho bạn hôm nay?";
+  }
+  if (!user || (!user.name && !user.username)) return cleanText;
   const n = user.name || user.username;
-  return text
+  return cleanText
     .replace(/Chào bạn/gi, `Chào ${n}`)
     .replace(/cho bạn/gi, `cho ${n}`)
     .replace(/của bạn/gi, `của ${n}`)
@@ -26,17 +51,19 @@ const personalizeText = (text, user) => {
     .replace(/bạn xem/gi, `${n} xem`);
 };
 
-const sendReply = (res, payload, user) => {
+const sendSocketReply = (socket, payload, user) => {
   if (payload.message) {
     payload.message = personalizeText(payload.message, user);
   }
-  return res.json(payload);
+  socket.emit("bot_reply", payload);
 };
 
-export const chatAI = async (req, res) => {
+export const chatAI = async (socket, data) => {
   try {
-    const { message, history } = req.body;
-    const user = req.user;
+    const { message, history, user } = data;
+
+    socket.emit("bot_typing", { isTyping: true });
+
     if (history && Array.isArray(history) && history.length > 0) {
       const lastMsg = history[history.length - 1];
 
@@ -106,14 +133,15 @@ export const chatAI = async (req, res) => {
 
         const isAccept = acceptRegex.test(cleanMsg);
         const isReject = rejectRegex.test(cleanMsg);
+
         if (
           botText.includes("premium") ||
           botText.includes("thanh toán") ||
           botText.includes("nâng cấp")
         ) {
           if (isAccept) {
-            return sendReply(
-              res,
+            return sendSocketReply(
+              socket,
               {
                 action: "redirect_premium",
                 message: `Ok bạn! Mình đang chuyển hướng bạn đến trang mua gói Premium nhé...`,
@@ -128,8 +156,8 @@ export const chatAI = async (req, res) => {
           botText.includes("chuyên viên")
         ) {
           if (isAccept) {
-            return sendReply(
-              res,
+            return sendSocketReply(
+              socket,
               {
                 action: "redirect_support",
                 message: `Ok bạn! Mình đang chuyển bạn đến trang Hỗ trợ để liên hệ trực tiếp với Admin...`,
@@ -145,8 +173,8 @@ export const chatAI = async (req, res) => {
             botText.includes("admin")) &&
           isReject
         ) {
-          return sendReply(
-            res,
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: `Dạ vâng, vậy bạn cứ tiếp tục trải nghiệm DevChill nhé. Cần giúp gì cứ gọi mình nha!`,
@@ -183,21 +211,20 @@ export const chatAI = async (req, res) => {
     }
 
     switch (action) {
-      case "redirect_premium": {
-        return sendReply(
-          res,
+      case "redirect_premium":
+        return sendSocketReply(
+          socket,
           {
             action: "redirect_premium",
             message: `Ok bạn! Mình đang chuyển hướng bạn đến trang mua gói Premium...`,
           },
           user,
         );
-      }
 
       case "suggest_from_history": {
         if (!user || !user.id) {
-          return sendReply(
-            res,
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message:
@@ -215,8 +242,8 @@ export const chatAI = async (req, res) => {
         const historyData = extractData(historyResult) || [];
 
         if (historyData.length === 0) {
-          return sendReply(
-            res,
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: `Tài khoản của bạn chưa xem phim nào nên mình chưa nắm được "gu". Bạn thích thể loại nào để mình tìm cho?`,
@@ -232,11 +259,7 @@ export const chatAI = async (req, res) => {
         const detailData = extractData(detailRes);
 
         let suggestCategory = "";
-        if (
-          detailData &&
-          detailData.categories &&
-          detailData.categories.length > 0
-        ) {
+        if (detailData?.categories?.length > 0) {
           suggestCategory = detailData.categories[0].slug;
         }
 
@@ -246,15 +269,14 @@ export const chatAI = async (req, res) => {
             limit: 15,
           });
           let suggestArr = extractData(suggestRes) || [];
-
           const watchedIds = historyData.map((h) => h.movie_id);
           const filteredSuggest = suggestArr
             .filter((m) => !watchedIds.includes(m.id))
             .slice(0, 10);
 
           if (filteredSuggest.length > 0) {
-            return sendReply(
-              res,
+            return sendSocketReply(
+              socket,
               {
                 action: "suggest_movies",
                 message: `Dựa trên siêu phẩm này, mình đoán bạn sẽ "ghiền" những bộ phim cùng thể loại sau:`,
@@ -271,8 +293,8 @@ export const chatAI = async (req, res) => {
         }
 
         const randomRes = await movieService.getPublicMovies({ limit: 10 });
-        return sendReply(
-          res,
+        return sendSocketReply(
+          socket,
           {
             action: "suggest_movies",
             message:
@@ -286,8 +308,8 @@ export const chatAI = async (req, res) => {
       case "auto_play":
       case "get_detail": {
         if (!aiParams.keyword) {
-          return sendReply(
-            res,
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: `Bạn muốn xem phim gì cơ? Gõ tên phim giúp mình nhé.`,
@@ -295,16 +317,15 @@ export const chatAI = async (req, res) => {
             user,
           );
         }
-
         const resData = await movieService.getPublicMovies({
           keyword: aiParams.keyword,
-          limit: 1,
+          limit: 20,
         });
-        const movieArr = extractData(resData);
+        const movieArr = extractData(resData) || [];
 
-        if (!movieArr || movieArr.length === 0) {
-          return sendReply(
-            res,
+        if (movieArr.length === 0) {
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: `DevChill không tìm thấy phim "${aiParams.keyword.replace(/\|/g, " ")}". Bạn kiểm tra lại tên giúp mình nha!`,
@@ -312,9 +333,47 @@ export const chatAI = async (req, res) => {
             user,
           );
         }
+        const normKeyword = normalizeVi(aiParams.keyword.replace(/\|/g, " "));
+        const searchWords = normKeyword
+          .split(/\s+/)
+          .filter((w) => w.length > 1);
 
-        const movieFound = movieArr[0];
+        let bestMatch = null;
+        let maxScore = 0;
 
+        for (const movie of movieArr) {
+          const normName = normalizeVi(movie.name);
+          const normOriginName = normalizeVi(movie.origin_name);
+          let score = 0;
+          if (
+            normName === normKeyword ||
+            normOriginName === normKeyword ||
+            normName.includes(normKeyword) ||
+            normOriginName.includes(normKeyword)
+          ) {
+            score += 100;
+          }
+          searchWords.forEach((w) => {
+            if (normName.includes(w) || normOriginName.includes(w)) {
+              score += 1;
+            }
+          });
+          if (score > maxScore) {
+            maxScore = score;
+            bestMatch = movie;
+          }
+        }
+        if (!bestMatch || maxScore === 0) {
+          return sendSocketReply(
+            socket,
+            {
+              action: "ask_user",
+              message: `Mình đã lục tìm nhưng hiện tại DevChill chưa có phim "${aiParams.keyword.replace(/\|/g, " ")}". Bạn thử tìm siêu phẩm khác xem sao nhé!`,
+            },
+            user,
+          );
+        }
+        const movieFound = bestMatch;
         if (action === "auto_play") {
           if (movieFound.lifecycle_status === "upcoming") {
             const detailRes = await movieService.getPublicMovieById(
@@ -338,8 +397,8 @@ export const chatAI = async (req, res) => {
                 .slice(0, 5);
             }
 
-            return sendReply(
-              res,
+            return sendSocketReply(
+              socket,
               {
                 action: "suggest_movies",
                 message: `Phim "${movieFound.name}" đang trong trạng thái sắp chiếu, bạn vui lòng chờ đợi thêm chút thời gian nha! Trong lúc chờ, bạn xem thử mấy bộ này nhé:`,
@@ -350,8 +409,8 @@ export const chatAI = async (req, res) => {
           }
 
           if (movieFound.is_premium && (!user || !user.is_premium)) {
-            return sendReply(
-              res,
+            return sendSocketReply(
+              socket,
               {
                 action: "ask_user",
                 message: `Bạn chưa có gói Premium để xem phim "${movieFound.name}". Bạn có muốn chuyển sang trang nâng cấp Premium không?`,
@@ -360,8 +419,8 @@ export const chatAI = async (req, res) => {
             );
           }
 
-          return sendReply(
-            res,
+          return sendSocketReply(
+            socket,
             {
               action: "redirect_play",
               slug: movieFound.slug,
@@ -370,8 +429,8 @@ export const chatAI = async (req, res) => {
             user,
           );
         } else {
-          return sendReply(
-            res,
+          return sendSocketReply(
+            socket,
             {
               action: "redirect_detail",
               slug: movieFound.slug,
@@ -383,16 +442,15 @@ export const chatAI = async (req, res) => {
       }
 
       case "get_actors": {
-        if (!aiParams.keyword) {
-          return sendReply(
-            res,
+        if (!aiParams.keyword)
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: "Bạn muốn xem diễn viên của phim nào?",
             },
             user,
           );
-        }
 
         const searchRes = await movieService.getPublicMovies({
           keyword: aiParams.keyword,
@@ -401,8 +459,8 @@ export const chatAI = async (req, res) => {
         const movieArr = extractData(searchRes);
 
         if (!movieArr || movieArr.length === 0) {
-          return sendReply(
-            res,
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: `Mình không tìm thấy phim "${aiParams.keyword.replace(/\|/g, " ")}" để xem diễn viên.`,
@@ -419,8 +477,8 @@ export const chatAI = async (req, res) => {
           !detailData.people ||
           detailData.people.length === 0
         ) {
-          return sendReply(
-            res,
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: `Hiện tại hệ thống chưa cập nhật danh sách diễn viên cho phim ${movieArr[0].name}.`,
@@ -433,9 +491,8 @@ export const chatAI = async (req, res) => {
           .filter((p) => p.role === "actor" || !p.role)
           .map((p) => p.name)
           .join(", ");
-
-        return sendReply(
-          res,
+        return sendSocketReply(
+          socket,
           {
             action: "ask_user",
             message: `Bộ phim ${movieArr[0].name} có sự tham gia của các diễn viên: ${actors}.`,
@@ -449,7 +506,6 @@ export const chatAI = async (req, res) => {
         const cleanParams = { ...aiParams };
         cleanParams.limit = cleanParams.limit || 10;
 
-        // 1. DỌN DẸP TỪ KHÓA
         if (cleanParams.keyword) {
           let kwArray = cleanParams.keyword
             .toLowerCase()
@@ -476,20 +532,17 @@ export const chatAI = async (req, res) => {
             cleanParams.keyword = kwArray.join("|");
           }
         }
-        if (!cleanParams.keyword || cleanParams.keyword.trim() === "") {
+        if (!cleanParams.keyword || cleanParams.keyword.trim() === "")
           delete cleanParams.keyword;
-        }
 
-        // 2. QUERY DATABASE
         const resData = await movieService.getPublicMovies(cleanParams);
         const resultArr = extractData(resData) || [];
 
-        // 3. XỬ LÝ TRƯỜNG HỢP KHÔNG TÌM THẤY PHIM
         if (resultArr.length === 0) {
           if (cleanParams.keyword) {
             const kwDisplay = cleanParams.keyword.replace(/\|/g, ", ");
-            return sendReply(
-              res,
+            return sendSocketReply(
+              socket,
               {
                 action: "ask_user",
                 message: `Mình đã tìm kỹ nội dung "${kwDisplay}" nhưng chưa thấy phim nào khớp trong kho. Bạn thử từ khóa khác nhé!`,
@@ -497,9 +550,9 @@ export const chatAI = async (req, res) => {
               user,
             );
           }
-          if (cleanParams.category) {
-            return sendReply(
-              res,
+          if (cleanParams.category)
+            return sendSocketReply(
+              socket,
               {
                 action: "ask_user",
                 message:
@@ -507,10 +560,9 @@ export const chatAI = async (req, res) => {
               },
               user,
             );
-          }
-          if (cleanParams.lang) {
-            return sendReply(
-              res,
+          if (cleanParams.lang)
+            return sendSocketReply(
+              socket,
               {
                 action: "ask_user",
                 message:
@@ -518,9 +570,9 @@ export const chatAI = async (req, res) => {
               },
               user,
             );
-          }
-          return sendReply(
-            res,
+
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message:
@@ -529,110 +581,105 @@ export const chatAI = async (req, res) => {
             user,
           );
         }
+
         let replyMsg = "DevChill tìm thấy các kết quả này cho bạn:";
-        if (cleanParams.category === "hai") {
+        if (cleanParams.category === "hai")
           replyMsg =
             "Đang vui lại càng thêm vui! Triển ngay mấy bộ tấu hài cực bựa này cho rộn ràng nhé! 😂";
-        } else if (cleanParams.category === "tinh-cam") {
+        else if (cleanParams.category === "tinh-cam")
           replyMsg =
             "Tâm trạng đang vui vẻ phơi phới đúng không? Thêm chút ngọt ngào lãng mạn với list siêu phẩm này nhé! 💕";
-        } else if (cleanParams.category === "tam-ly") {
+        else if (cleanParams.category === "tam-ly")
           replyMsg =
             "Có những ngày tâm trạng hơi chùng xuống... Để DevChill vỗ về bạn bằng mấy bộ phim sâu lắng này nha 🥺";
-        } else if (cleanParams.category === "gia-dinh") {
+        else if (cleanParams.category === "gia-dinh")
           replyMsg =
             "Cần một chút bình yên chữa lành? Mấy bộ phim gia đình nhẹ nhàng này là chuẩn bài luôn! 🏡";
-        } else if (cleanParams.category === "kinh-di") {
+        else if (cleanParams.category === "kinh-di")
           replyMsg =
             "Chuẩn bị tinh thần tỉnh ngủ chưa? Đóng cửa tắt đèn cày mấy bộ rùng rợn này nhé! 👻";
-        } else if (
+        else if (
           cleanParams.category === "hanh-dong" ||
           cleanParams.category === "hinh-su"
-        ) {
+        )
           replyMsg =
             "Thích cảm giác mạnh à? List phim hành động cháy nổ đùng đùng này sinh ra để dành cho bạn! 🔥";
-        } else if (cleanParams.category === "hoat-hinh") {
+        else if (cleanParams.category === "hoat-hinh")
           replyMsg =
             "Xin vé đi tuổi thơ hay tìm phim cho bé nhà mình xem? List hoạt hình siêu dễ thương này là chân ái luôn nha! 🧸✨";
-        } else if (cleanParams.country === "viet-nam") {
+        else if (cleanParams.country === "viet-nam")
           replyMsg =
             "Người Việt ủng hộ phim Việt nào! Điểm danh ngay những siêu phẩm điện ảnh và truyền hình hot nhất nước mình nhé 🇻🇳🍿";
-        } else if (cleanParams.country === "han-quoc") {
+        else if (cleanParams.country === "han-quoc")
           replyMsg =
             "Mê phim Hàn thì bơi hết vào đây! Toàn siêu phẩm oppa cực phẩm thôi nhé 🇰🇷";
-        } else if (cleanParams.country === "trung-quoc") {
+        else if (cleanParams.country === "trung-quoc")
           replyMsg =
             "Các tỷ tỷ và ca ca Hoa Ngữ đang chờ bạn cày view trong list phim hot này nè 🇨🇳";
-        } else if (cleanParams.country === "au-my") {
+        else if (cleanParams.country === "au-my")
           replyMsg =
             "Chuẩn gu Âu Mỹ Hollywood rồi, đổi gió với list phim đỉnh cao này nha 🎬";
-        } else if (cleanParams.keyword) {
-          const kwDisplay = cleanParams.keyword.replace(/\|/g, " ");
-          replyMsg = `Mình đã lục tung kho và nhặt ra các phim sát với cốt truyện "${kwDisplay}" nhất, bạn ưng bộ nào không?`;
-        } else if (cleanParams.year) {
+        else if (cleanParams.keyword)
+          replyMsg = `Mình đã lục tung kho và nhặt ra các phim sát với cốt truyện "${cleanParams.keyword.replace(/\|/g, " ")}" nhất, bạn ưng bộ nào không?`;
+        else if (cleanParams.year)
           replyMsg = `Hàng nóng hổi đây! Danh sách các phim nổi bật của năm ${cleanParams.year} cho bạn nè:`;
-        }
-        return sendReply(
-          res,
-          {
-            action: "suggest_movies",
-            message: replyMsg,
-            payload: resultArr,
-          },
+
+        return sendSocketReply(
+          socket,
+          { action: "suggest_movies", message: replyMsg, payload: resultArr },
           user,
         );
       }
 
-      case "getPublicMovieById": {
-        const resData = await movieService.getPublicMovieById(aiParams.id);
-        return res.json(extractData(resData));
-      }
-
-      case "getMovieWatch": {
-        const resData = await movieService.getMovieWatch(
-          aiParams.slug,
-          aiParams,
-          user,
+      case "getPublicMovieById":
+        return socket.emit(
+          "bot_reply",
+          extractData(await movieService.getPublicMovieById(aiParams.id)),
         );
-        return res.json(extractData(resData));
-      }
 
-      case "getCategories": {
-        const resData = await movieService.getCategories();
-        return res.json(extractData(resData) || []);
-      }
+      case "getMovieWatch":
+        return socket.emit(
+          "bot_reply",
+          extractData(
+            await movieService.getMovieWatch(aiParams.slug, aiParams, user),
+          ),
+        );
 
-      case "getCountries": {
-        const resData = await movieService.getCountries();
-        return res.json(extractData(resData) || []);
-      }
+      case "getCategories":
+        return socket.emit(
+          "bot_reply",
+          extractData(await movieService.getCategories()) || [],
+        );
+
+      case "getCountries":
+        return socket.emit(
+          "bot_reply",
+          extractData(await movieService.getCountries()) || [],
+        );
 
       case "getUserHistory": {
-        if (!user || !user.id) {
-          return sendReply(
-            res,
+        if (!user || !user.id)
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: `Bạn cần đăng nhập để xem lại lịch sử phim nhé! 🎬`,
             },
             user,
           );
-        }
-
         const limit = aiParams.limit || 10;
         const page = aiParams.page || 1;
-        const offset = (page - 1) * limit;
-
-        const historyResult = await watchHistoryService.getUserHistory(
-          user.id,
-          limit,
-          offset,
+        const historyData = extractData(
+          await watchHistoryService.getUserHistory(
+            user.id,
+            limit,
+            (page - 1) * limit,
+          ),
         );
-        const historyData = extractData(historyResult);
 
         if (!historyData || historyData.length === 0) {
-          return sendReply(
-            res,
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: `Tài khoản của bạn chưa xem bộ phim nào trên DevChill cả.`,
@@ -640,23 +687,25 @@ export const chatAI = async (req, res) => {
             user,
           );
         }
-        return res.json(historyData);
+        return socket.emit("bot_reply", {
+          action: "user_history",
+          payload: historyData,
+        });
       }
 
       case "clearAllHistory": {
-        if (!user || !user.id) {
-          return sendReply(
-            res,
+        if (!user || !user.id)
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: `Bạn chưa đăng nhập nên mình không có lịch sử nào để xoá.`,
             },
             user,
           );
-        }
         await watchHistoryService.clearAllHistory(user.id);
-        return sendReply(
-          res,
+        return sendSocketReply(
+          socket,
           {
             action: "ask_user",
             message: `Đã xoá toàn bộ lịch sử xem phim của bạn thành công!`,
@@ -664,14 +713,15 @@ export const chatAI = async (req, res) => {
           user,
         );
       }
+
       case "info_premium": {
         try {
           const plansData = await planService.getAllPlansService();
           const activePlans = plansData.filter((p) => p.status === "active");
 
-          if (activePlans.length === 0) {
-            return sendReply(
-              res,
+          if (activePlans.length === 0)
+            return sendSocketReply(
+              socket,
               {
                 action: "ask_user",
                 message:
@@ -679,7 +729,6 @@ export const chatAI = async (req, res) => {
               },
               user,
             );
-          }
 
           let planMsg =
             "Chào bạn! Hiện tại DevChill đang cung cấp các gói VIP siêu ưu đãi sau:\n";
@@ -693,6 +742,7 @@ export const chatAI = async (req, res) => {
             planMsg += `⭐ ${p.name}: ${priceFormat}\n`;
             if (p.is_popular) popularPlan = p;
           });
+
           if (popularPlan) {
             const priceFormat = new Intl.NumberFormat("vi-VN", {
               style: "currency",
@@ -703,11 +753,14 @@ export const chatAI = async (req, res) => {
             planMsg +=
               "\nBạn có muốn chuyển sang trang Thanh toán để nâng cấp không?";
           }
-
-          return sendReply(res, { action: "ask_user", message: planMsg }, user);
+          return sendSocketReply(
+            socket,
+            { action: "ask_user", message: planMsg },
+            user,
+          );
         } catch (error) {
-          return sendReply(
-            res,
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message:
@@ -717,9 +770,10 @@ export const chatAI = async (req, res) => {
           );
         }
       }
-      case "payment_issue_step_1": {
-        return sendReply(
-          res,
+
+      case "payment_issue_step_1":
+        return sendSocketReply(
+          socket,
           {
             action: "ask_user",
             message:
@@ -727,10 +781,10 @@ export const chatAI = async (req, res) => {
           },
           user,
         );
-      }
-      case "payment_issue_step_2": {
-        return sendReply(
-          res,
+
+      case "payment_issue_step_2":
+        return sendSocketReply(
+          socket,
           {
             action: "ask_user",
             message:
@@ -738,10 +792,10 @@ export const chatAI = async (req, res) => {
           },
           user,
         );
-      }
-      case "account_issue": {
-        return sendReply(
-          res,
+
+      case "account_issue":
+        return sendSocketReply(
+          socket,
           {
             action: "ask_user",
             message:
@@ -749,21 +803,21 @@ export const chatAI = async (req, res) => {
           },
           user,
         );
-      }
-      case "redirect_support": {
-        return sendReply(
-          res,
+
+      case "redirect_support":
+        return sendSocketReply(
+          socket,
           {
             action: "redirect_support",
             message: `Ok bạn! Mình đang chuyển bạn đến trang Hỗ trợ để liên hệ với Admin...`,
           },
           user,
         );
-      }
+
       case "continue_watching": {
-        if (!user || !user.id) {
-          return sendReply(
-            res,
+        if (!user || !user.id)
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message:
@@ -771,17 +825,13 @@ export const chatAI = async (req, res) => {
             },
             user,
           );
-        }
-        const historyResult = await watchHistoryService.getUserHistory(
-          user.id,
-          1,
-          0,
-        );
-        const historyData = extractData(historyResult) || [];
-
-        if (historyData.length === 0) {
-          return sendReply(
-            res,
+        const historyData =
+          extractData(
+            await watchHistoryService.getUserHistory(user.id, 1, 0),
+          ) || [];
+        if (historyData.length === 0)
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message:
@@ -789,37 +839,31 @@ export const chatAI = async (req, res) => {
             },
             user,
           );
-        }
-
-        const lastWatched = historyData[0];
-
-        return sendReply(
-          res,
+        return sendSocketReply(
+          socket,
           {
             action: "redirect_play",
-            slug: lastWatched.movie_slug,
-            message: `Mình đang mở lại "${lastWatched.movie_name}" cho bạn xem tiếp nhé!`,
+            slug: historyData[0].movie_slug,
+            message: `Mình đang mở lại "${historyData[0].movie_name}" cho bạn xem tiếp nhé!`,
           },
           user,
         );
       }
+
       case "get_upcoming": {
         let finalLimit = aiParams.limit || 10;
-        if (finalLimit < 5) {
-          finalLimit = 10;
-        }
-
-        const upcomingParams = {
-          ...aiParams,
-          limit: finalLimit,
-          lifecycle_status: "upcoming",
-        };
-        const resData = await movieService.getPublicMovies(upcomingParams);
-        const upcomingMovies = extractData(resData) || [];
-
-        if (upcomingMovies.length === 0) {
-          return sendReply(
-            res,
+        if (finalLimit < 5) finalLimit = 10;
+        const upcomingMovies =
+          extractData(
+            await movieService.getPublicMovies({
+              ...aiParams,
+              limit: finalLimit,
+              lifecycle_status: "upcoming",
+            }),
+          ) || [];
+        if (upcomingMovies.length === 0)
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message:
@@ -827,10 +871,8 @@ export const chatAI = async (req, res) => {
             },
             user,
           );
-        }
-
-        return sendReply(
-          res,
+        return sendSocketReply(
+          socket,
           {
             action: "suggest_movies",
             message:
@@ -840,37 +882,34 @@ export const chatAI = async (req, res) => {
           user,
         );
       }
-      case "random_surprise": {
-        const resData = await movieService.getPublicMovies({ limit: 30 });
-        const moviesArr = extractData(resData) || [];
 
-        if (moviesArr.length === 0) {
-          return sendReply(
-            res,
+      case "random_surprise": {
+        const moviesArr =
+          extractData(await movieService.getPublicMovies({ limit: 30 })) || [];
+        if (moviesArr.length === 0)
+          return sendSocketReply(
+            socket,
             {
               action: "ask_user",
               message: "Kho phim đang bảo trì nhẹ, bạn quay lại sau nhé!",
             },
             user,
           );
-        }
-        const randomIndex = Math.floor(Math.random() * moviesArr.length);
-        const luckyMovie = moviesArr[randomIndex];
-
-        return sendReply(
-          res,
+        return sendSocketReply(
+          socket,
           {
             action: "random_surprise",
             message:
               "DevChill đã dùng nhân phẩm quay cho bạn siêu phẩm này! Nhấn Phát để xem ngay nào 🍿",
-            payload: [luckyMovie],
+            payload: [moviesArr[Math.floor(Math.random() * moviesArr.length)]],
           },
           user,
         );
       }
-      case "easter_egg_about_dev": {
-        return sendReply(
-          res,
+
+      case "easter_egg_about_dev":
+        return sendSocketReply(
+          socket,
           {
             action: "ask_user",
             message:
@@ -878,22 +917,21 @@ export const chatAI = async (req, res) => {
           },
           user,
         );
-      }
 
       case "ask_user": {
         let finalMessage =
           ai.message || aiParams.message || "DevChill đang nghe đây...";
         finalMessage = finalMessage.replace(/\[Hệ thống.*\]/gi, "").trim();
-        return sendReply(
-          res,
+        return sendSocketReply(
+          socket,
           { action: "ask_user", message: finalMessage },
           user,
         );
       }
 
       default:
-        return sendReply(
-          res,
+        return sendSocketReply(
+          socket,
           {
             action: "ask_user",
             message: "DevChill chưa hiểu ý bạn, bạn nói lại nhé?",
@@ -903,6 +941,6 @@ export const chatAI = async (req, res) => {
     }
   } catch (err) {
     console.error("AI ERROR:", err);
-    return res.status(500).json({ error: "Lỗi hệ thống AI" });
+    return socket.emit("bot_error", { error: "Lỗi hệ thống AI" });
   }
 };

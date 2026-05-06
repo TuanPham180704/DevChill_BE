@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY_V2,
+  apiKey: process.env.GROQ_API_KEY,
   baseURL: "https://api.groq.com/openai/v1",
 });
 
@@ -238,7 +238,8 @@ export const askAI = async (message, history = []) => {
     const safeHistory = Array.isArray(history) ? history : [];
 
     const res = await client.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+      // model: "llama-3.1-8b-instant",
+      model: "llama-3.3-70b-versatile",
       temperature: 0.0,
       response_format: { type: "json_object" },
       messages: [
