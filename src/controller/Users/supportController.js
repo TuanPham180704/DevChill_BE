@@ -95,7 +95,7 @@ export const getTicketDetail = async (req, res) => {
 export const markNotificationAsRead = async (req, res) => {
   try {
     const notifId = req.params.id;
-    const userId = req.user.id; 
+    const userId = req.user.id;
 
     const updatedNotif = await supportService.markNotificationReadClientService(
       notifId,
@@ -107,5 +107,28 @@ export const markNotificationAsRead = async (req, res) => {
     });
   } catch (err) {
     res.status(403).json({ message: err.message });
+  }
+};
+export const closeTicketClient = async (req, res) => {
+  try {
+    const ticketId = req.params.id;
+    const userId = req.user.id; 
+
+    const result = await supportService.closeTicketClientService(
+      ticketId,
+      userId,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Đã đóng vé hỗ trợ thành công",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Lỗi closeTicketClient:", error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || "Đã xảy ra lỗi khi đóng vé hỗ trợ",
+    });
   }
 };

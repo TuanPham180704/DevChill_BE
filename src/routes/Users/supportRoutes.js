@@ -22,5 +22,5 @@ router.put(
   supportController.markNotificationAsRead,
 );
 router.post("/:id/reply", authenticate, supportController.replyTicket);
-
+router.put("/:id/close", authenticate, supportController.closeTicketClient);
 export default router;

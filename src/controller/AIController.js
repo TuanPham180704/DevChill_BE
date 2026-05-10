@@ -9,8 +9,6 @@ const extractData = (result) => {
   if (result.data) return result.data;
   return result;
 };
-
-// Hàm chuẩn hóa tiếng Việt: bỏ dấu, đưa về in thường để so sánh tuyệt đối
 const normalizeVi = (str) => {
   if (!str) return "";
   return str
@@ -619,7 +617,10 @@ export const chatAI = async (socket, data) => {
         else if (cleanParams.country === "au-my")
           replyMsg =
             "Chuẩn gu Âu Mỹ Hollywood rồi, đổi gió với list phim đỉnh cao này nha 🎬";
-        else if (cleanParams.keyword)
+        else if (cleanParams.country) {
+          const countryName = cleanParams.country.replace(/-/g, " "); 
+          replyMsg = `Kho phim ${countryName} đầy hấp dẫn cho bạn đây. Đổi gió với list siêu phẩm này nhé! 🍿`;
+        } else if (cleanParams.keyword)
           replyMsg = `Mình đã lục tung kho và nhặt ra các phim sát với cốt truyện "${cleanParams.keyword.replace(/\|/g, " ")}" nhất, bạn ưng bộ nào không?`;
         else if (cleanParams.year)
           replyMsg = `Hàng nóng hổi đây! Danh sách các phim nổi bật của năm ${cleanParams.year} cho bạn nè:`;

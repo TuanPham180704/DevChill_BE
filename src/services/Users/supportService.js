@@ -155,3 +155,47 @@ export const markNotificationReadClientService = async (notifId, userId) => {
 
   return result.rows[0];
 };
+export const closeTicketClientService = async (ticketId, userId) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const ticketCheck = await client.query(
+      `SELECT status FROM support_requests WHERE id = $1 AND user_id = $2`,
+      [ticketId, userId],
+    );
+
+    if (ticketCheck.rows.length === 0) {
+      throw new Error(
+        "Không tìm thấy vé hỗ trợ hoặc bạn không có quyền thao tác!",
+      );
+    }
+
+    if (ticketCheck.rows[0].status === "closed") {
+      throw new Error("Vé hỗ trợ này đã được đóng từ trước!");
+    }
+    const updatedTicket = await client.query(
+      `UPDATE support_requests 
+       SET status = 'closed', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND user_id = $2
+       RETURNING *`,
+      [ticketId, userId],
+    );
+    await client.query(
+      `INSERT INTO support_responses (request_id, sender_id, is_admin_reply, content_response)
+       VALUES ($1, $2, false, $3)`,
+      [
+        ticketId,
+        userId,
+        "Hệ thống: Khách hàng đã chủ động đóng vé hỗ trợ này.",
+      ],
+    );
+
+    await client.query("COMMIT");
+    return updatedTicket.rows[0];
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};
