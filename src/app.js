@@ -24,6 +24,7 @@ import publicMoviesRoutes from "./routes/moviePublicRoutes.js";
 import watchHistoryRoutes from "./routes/Users/watchHistoryRoutes.js";
 import supportRoutes from "./routes/Users/supportRoutes.js";
 import aiRoutes from "./routes/AIRoutes.js";
+import adminOverView from "./routes/Admin/overViewRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -53,6 +54,7 @@ app.use("/api/history", watchHistoryRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/movies", publicMoviesRoutes);
+app.use("/api/admin/overview", adminOverView);
 
 app.get("/", (req, res) => {
   res.send("DevChill");
