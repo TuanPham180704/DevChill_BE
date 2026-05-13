@@ -62,3 +62,26 @@ export const replyTicket = async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 };
+export const updateTicketStatus = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ message: "Status is required" });
+    }
+
+    const result = await supportService.updateTicketStatusAdminService(
+      req.params.id,
+      adminId,
+      status,
+    );
+
+    res.json({
+      message: "Cập nhật trạng thái thành công",
+      data: result,
+    });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};

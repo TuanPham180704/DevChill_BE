@@ -34,5 +34,11 @@ router.post(
   authorization("admin"),
   supportController.replyTicket,
 );
+router.patch(
+  "/:id/status",
+  authenticate,
+  authorization("admin"),
+  supportController.updateTicketStatus,
+);
 
 export default router;

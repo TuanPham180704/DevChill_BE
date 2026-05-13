@@ -61,7 +61,9 @@ export const createTicketService = async (data, user) => {
 
 export const getUserTicketsService = async (userId) => {
   const result = await pool.query(
-    `SELECT * FROM support_requests WHERE user_id = $1 ORDER BY created_at DESC`,
+    `SELECT * FROM support_requests 
+     WHERE user_id = $1 
+     ORDER BY COALESCE(updated_at, created_at) DESC`,
     [userId],
   );
   return result.rows;
@@ -94,6 +96,15 @@ export const replyTicketClientService = async (
         "Không tìm thấy vé hỗ trợ hoặc bạn không có quyền truy cập",
       );
     }
+
+    const currentStatus = ticketRes.rows[0].status;
+    if (currentStatus === "closed") {
+      throw new Error("Vé hỗ trợ này đã bị đóng, không thể phản hồi thêm!");
+    }
+    let nextStatus = currentStatus;
+    if (currentStatus === "resolved") {
+      nextStatus = "in_progress";
+    }
     const replyRes = await client.query(
       `INSERT INTO support_responses (request_id, sender_id, is_admin_reply, content_response, attachments)
        VALUES ($1, $2, false, $3, $4) RETURNING *`,
@@ -101,9 +112,9 @@ export const replyTicketClientService = async (
     );
     await client.query(
       `UPDATE support_requests 
-       SET status = 'open', updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
-      [ticketId],
+       SET status = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [nextStatus, ticketId],
     );
 
     await client.query("COMMIT");
