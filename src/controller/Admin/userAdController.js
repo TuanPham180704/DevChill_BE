@@ -43,8 +43,9 @@ export const updateUser = async (req, res) => {
     res.json(user);
   } catch (err) {
     console.error("updateUser error:", err);
-    res.status(500).json({
-      message: "Lỗi server khi cập nhật user",
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({
+      message: err.message || "Lỗi server nội bộ",
     });
   }
 };

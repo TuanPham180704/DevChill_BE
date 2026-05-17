@@ -158,7 +158,7 @@ export const getReportService = async ({ from_date, to_date, type }) => {
       pool.query(usersQuery, [from_date, to_date]),
       pool.query(ticketsQuery, [from_date, to_date]),
       pool.query(topMoviesQuery, [from_date, to_date]),
-      pool.query(plansDistributionQuery, [from_date, to_date]),
+      pool.query(plansDistributionQuery, [from_date, to_date]), 
     ]);
 
   return {

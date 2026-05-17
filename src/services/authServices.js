@@ -13,11 +13,12 @@ export const register = async (username, email, password, confirmPassword) => {
       err.status = 400;
       throw err;
     }
-
+    const normalizedEmail = email.trim().toLowerCase();
     const exist = await pool.query(
-      "SELECT id, is_active FROM users WHERE email=$1",
-      [email],
+      "SELECT id, is_active FROM users WHERE email=$1 AND deleted_at IS NULL",
+      [normalizedEmail],
     );
+
     if (exist.rows.length) {
       const user = exist.rows[0];
       if (user.is_active) {
@@ -25,12 +26,13 @@ export const register = async (username, email, password, confirmPassword) => {
         err.status = 400;
         throw err;
       }
+
       const existingOtp = await pool.query(
         `SELECT * FROM email_verifications
          WHERE email=$1
          ORDER BY created_at DESC
          LIMIT 1`,
-        [email],
+        [normalizedEmail],
       );
 
       if (existingOtp.rows.length) {
@@ -46,8 +48,9 @@ export const register = async (username, email, password, confirmPassword) => {
           throw err;
         }
       }
+
       await pool.query("DELETE FROM email_verifications WHERE email=$1", [
-        email,
+        normalizedEmail,
       ]);
 
       const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -56,22 +59,23 @@ export const register = async (username, email, password, confirmPassword) => {
       await pool.query(
         `INSERT INTO email_verifications (email,code,expires_at)
          VALUES ($1,$2,$3)`,
-        [email, code, expires],
+        [normalizedEmail, code, expires], 
       );
 
-      await sendRegisterCodeEmail(email, code);
+      await sendRegisterCodeEmail(normalizedEmail, code);
 
       return {
         message: "Email chưa xác thực, đã gửi lại OTP",
         otp_expire: expires,
       };
     }
+
     const hashed = await bcrypt.hash(password, SALT);
 
     await pool.query(
       `INSERT INTO users (username,email,password,is_active)
        VALUES ($1,$2,$3,false)`,
-      [username, email, hashed],
+      [username, normalizedEmail, hashed],
     );
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -80,10 +84,10 @@ export const register = async (username, email, password, confirmPassword) => {
     await pool.query(
       `INSERT INTO email_verifications (email,code,expires_at)
        VALUES ($1,$2,$3)`,
-      [email, code, expires],
+      [normalizedEmail, code, expires], 
     );
 
-    await sendRegisterCodeEmail(email, code);
+    await sendRegisterCodeEmail(normalizedEmail, code);
 
     return { message: "Đã gửi OTP", otp_expire: expires };
   } catch (error) {

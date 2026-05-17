@@ -6,12 +6,7 @@ import { sendUnlockEmail } from "../../utils/sendUnlockEmail.js";
 
 const SALT = 10;
 
-export async function getAllUsers({
-  page = 1,
-  limit = 10,
-  sort_by,
-  order,
-}) {
+export async function getAllUsers({ page = 1, limit = 10, sort_by, order }) {
   const offset = (page - 1) * limit;
   const ALLOWED_SORT_COLUMNS = {
     id: "id",
@@ -67,16 +62,16 @@ export async function updateUser(id, data) {
   const values = [];
   let index = 1;
   if (data.email) {
-    if (!validator.isEmail(data.email)) {
+    const normalizedEmail = data.email.trim().toLowerCase();
+    if (!validator.isEmail(normalizedEmail)) {
       const err = new Error("Email không hợp lệ");
       err.status = 400;
       throw err;
     }
     const existing = await pool.query(
-      "SELECT id FROM users WHERE email = $1 AND id != $2",
-      [data.email, id],
+      "SELECT id FROM users WHERE email = $1 AND id != $2 AND deleted_at IS NULL",
+      [normalizedEmail, id],
     );
-
     if (existing.rows.length > 0) {
       const err = new Error("Email đã tồn tại");
       err.status = 409;
@@ -84,9 +79,10 @@ export async function updateUser(id, data) {
     }
 
     fields.push(`email=$${index++}`);
-    values.push(data.email);
+    values.push(normalizedEmail);
+    fields.push(`is_active=$${index++}`);
+    values.push(true);
   }
-
   if (data.password) {
     if (data.password.length < 8) {
       const err = new Error("Password phải >= 8 ký tự");
