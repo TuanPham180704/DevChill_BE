@@ -62,19 +62,20 @@ export const getPublicMovies = async (query) => {
       phrases.forEach((p) => {
         const k = add(`%${p}%`);
         phraseConditions.push(`(
-          m.name ILIKE ${k} OR 
-          m.origin_name ILIKE ${k} OR
-          m.content ILIKE ${k} OR
-          EXISTS (
-            SELECT 1 
-            FROM movie_people mp 
-            JOIN people p ON p.id = mp.person_id
-            WHERE mp.movie_id = m.id AND p.name ILIKE ${k}
-          )
-        )`);
+    unaccent(m.name) ILIKE unaccent(${k}) OR 
+    unaccent(m.origin_name) ILIKE unaccent(${k}) OR
+    unaccent(m.content) ILIKE unaccent(${k}) OR
+    EXISTS (
+      SELECT 1 
+      FROM movie_people mp 
+      JOIN people p ON p.id = mp.person_id
+      WHERE mp.movie_id = m.id AND unaccent(p.name) ILIKE unaccent(${k})
+    )
+  )`);
+
         scoreCases.push(`(
-          CASE WHEN m.name ILIKE ${k} OR m.origin_name ILIKE ${k} OR m.content ILIKE ${k} THEN 1 ELSE 0 END
-        )`);
+    CASE WHEN unaccent(m.name) ILIKE unaccent(${k}) OR unaccent(m.origin_name) ILIKE unaccent(${k}) OR unaccent(m.content) ILIKE unaccent(${k}) THEN 1 ELSE 0 END
+  )`);
       });
 
       where.push(`(${phraseConditions.join(" OR ")})`);
